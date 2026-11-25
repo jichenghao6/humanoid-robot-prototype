@@ -66,7 +66,8 @@ def load_policy(ckpt_path: Path, device: str = "cpu") -> Callable[[np.ndarray], 
     from rsl_rl.models import MLPModel
     from tensordict import TensorDict
 
-    ckpt = torch.load(str(ckpt_path), map_location=device, weights_only=False)
+    # Load weights-only to avoid arbitrary pickle execution from untrusted .pt checkpoints
+    ckpt = torch.load(str(ckpt_path), map_location=device, weights_only=True)
     num_actions = len(ACTION_JOINT_NAMES)
     obs_dim = 74
     critic_dim = 82

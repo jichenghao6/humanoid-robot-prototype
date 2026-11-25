@@ -68,6 +68,11 @@ body,
   min-width: 0;
 }
 
+.hud-brand > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .hud-slashes {
   font-family: 'JetBrains Mono', monospace;
   font-size: 16px;
@@ -82,6 +87,8 @@ body,
   letter-spacing: 1.6px;
   color: #eef5ff;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hud-subtitle {
@@ -565,4 +572,78 @@ body,
   .hud-right.drawer-open {
     transform: translateX(0);
   }
+}
+
+@media (max-width: 760px) {
+  .hud-topbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    padding: 8px 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .hud-title {
+    font-size: 12px;
+    letter-spacing: 0.8px;
+  }
+
+  .hud-telemetry {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .hud-drawer-toggle {
+    top: 96px;
+  }
+
+  .hud-drawer-toggle-left {
+    left: 8px;
+  }
+
+  .hud-drawer-toggle-right {
+    right: 8px;
+  }
+
+  .hud-left,
+  .hud-right {
+    top: 132px;
+    max-height: calc(100vh - 196px);
+  }
+}
+
+@media (max-width: 480px) {
+  .hud-slashes,
+  #hud-status {
+    display: none;
+  }
+}
+
+.webgl-fallback {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(460px, calc(100vw - 32px));
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  line-height: 1.5;
+}
+
+.webgl-fallback-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #eef5ff;
+}
+
+.webgl-fallback-detail {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: rgba(154, 188, 224, 0.8);
+  word-break: break-word;
 }

@@ -396,11 +396,7 @@ class HumanoidLocomotionEnv(VecEnv):
         gait_freq = GAIT_FREQ_BASE + GAIT_FREQ_SLOPE * torch.clamp(vx_abs, 0.0, GAIT_FREQ_MAX_VX)
         self.gait_phase = (self.gait_phase + gait_freq * self.control_dt) % 1.0
 
-        # Periodic command resampling and disturbance pushes
-        resample_mask = (self.episode_length_buf > 0) & (self.episode_length_buf % int(5.0 / self.control_dt) == 0)
-        if resample_mask.any():
-            self._sample_commands(resample_mask.nonzero(as_tuple=False).squeeze(-1))
-
+        # Apply disturbance pushes after physics step
         if self.cfg_obj.enable_pushes:
             push_every = int(self.cfg_obj.push_interval_s / self.control_dt)
             push_mask = (self.episode_length_buf > 25) & (self.episode_length_buf % push_every == 0)
@@ -408,13 +404,22 @@ class HumanoidLocomotionEnv(VecEnv):
                 p_ids = push_mask.nonzero(as_tuple=False).squeeze(-1)
                 self.qvel[p_ids, 0:2] += torch.empty((p_ids.shape[0], 2), device=self.device).uniform_(-0.32, 0.32)
 
-        # Compute rewards & terminations before reset
+        # Compute rewards & terminations against the command active during this step
         rewards, reward_log = self._compute_rewards()
         terminated, time_outs = self._check_terminations()
+
+        # Guard against NaN/Inf reward propagation on divergent states before subtracting penalty
+        bad_env = (
+            ~torch.isfinite(self.qpos).all(dim=-1)
+            | ~torch.isfinite(self.qvel).all(dim=-1)
+            | ~torch.isfinite(rewards)
+        )
+        terminated = terminated | bad_env
         dones = terminated | time_outs
 
-        # Penalty for early fall termination (not timeout)
-        rewards = torch.where(terminated, rewards - 2.0, rewards)
+        safe_rewards = torch.where(bad_env, torch.zeros_like(rewards), rewards)
+        # Penalty for early fall termination or numerical divergence (not timeout)
+        rewards = torch.where(terminated, safe_rewards - 2.0, safe_rewards)
 
         done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
         if done_ids.numel() > 0:
@@ -425,6 +430,15 @@ class HumanoidLocomotionEnv(VecEnv):
             wp.synchronize()
             self.foot_prev_xy[done_ids, 0, :] = self.site_xpos[done_ids, self.sole_l_site_id, :2]
             self.foot_prev_xy[done_ids, 1, :] = self.site_xpos[done_ids, self.sole_r_site_id, :2]
+
+        # Resample commands ONLY after reward/reset so the next observation receives the new command cleanly
+        resample_mask = (
+            (~dones)
+            & (self.episode_length_buf > 0)
+            & (self.episode_length_buf % int(5.0 / self.control_dt) == 0)
+        )
+        if resample_mask.any():
+            self._sample_commands(resample_mask.nonzero(as_tuple=False).squeeze(-1))
 
         self._obs_td = self._compute_observations()
 
@@ -691,7 +705,7 @@ class HumanoidLocomotionEnv(VecEnv):
         )
         total_reward = torch.clamp(raw_rate, min=0.0) * self.control_dt
 
-        log = {
+        raw_log = {
             "Episode/rew_lin_vel": rew_lin_vel.mean() * self.control_dt,
             "Episode/rew_ang_vel": rew_ang_vel.mean() * self.control_dt,
             "Episode/rew_gait_phase": rew_gait_phase.mean() * self.control_dt,
@@ -703,6 +717,7 @@ class HumanoidLocomotionEnv(VecEnv):
             "Episode/vel_x": lin_vel_body[:, 0].mean(),
             "Episode/wz": self.wz_ema.mean(),
         }
+        log = {k: torch.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0) for k, v in raw_log.items()}
         return total_reward, log
 
     def _check_terminations(self) -> tuple[torch.Tensor, torch.Tensor]:

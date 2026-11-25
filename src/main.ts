@@ -67,12 +67,31 @@ function bootstrap(): void {
   const bus = new EventBus();
 
   // Renderer
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    powerPreference: 'high-performance',
-    preserveDrawingBuffer: true,
-  });
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: true,
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const box = document.createElement('div');
+    box.className = 'hud-panel webgl-fallback';
+    const title = document.createElement('div');
+    title.className = 'webgl-fallback-title';
+    title.textContent = 'WebGL 渲染上下文初始化失败 / WebGL Unavailable';
+    const hint = document.createElement('p');
+    hint.textContent =
+      '当前浏览器环境无法创建 3D WebGL 上下文，请启用硬件加速或检查浏览器 WebGL 设置。';
+    const errEl = document.createElement('div');
+    errEl.className = 'webgl-fallback-detail';
+    errEl.textContent = detail;
+    box.append(title, hint, errEl);
+    hudRoot.replaceChildren(box);
+    return;
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
@@ -428,7 +447,10 @@ function bootstrap(): void {
     const target = e.target as HTMLElement | null;
     if (
       target &&
-      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable)
     ) {
       return;
     }
@@ -439,6 +461,9 @@ function bootstrap(): void {
     else if (e.key === '4') bus.emit('camera:preset', '3/4');
     else if (e.key === '5') bus.emit('camera:preset', 'FREE');
     else if (e.code === 'Space') {
+      if (target && target.closest('button, a, summary, [role="button"]')) {
+        return;
+      }
       e.preventDefault();
       bus.emit('playback:toggle', !state.playing);
     } else if (e.key === 'e' || e.key === 'E') {

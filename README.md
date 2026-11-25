@@ -13,7 +13,7 @@ An end-to-end bipedal humanoid project spanning procedural **Three.js** CAD/rigg
 ![Walk Side](docs/images/walk_v5_side.png)
 ![Walk Front](docs/images/walk_v5_front.png)
 
-**Run (`v5`, `vx = 2.2 m/s`, `arm_leg_corr = 0.994`, `roll_std = 2.01°`, `0` self-collisions, `150 N` forward & lateral push recovery):**
+**Run (`v5`, `vx = 2.2 m/s`, `arm_leg_corr = 0.994`, `roll_std = 2.01°`, `0` steady-state self-collisions in `t = 2–10 s`, `150 N` forward & lateral push recovery):**
 
 ![Run Side](docs/images/run_v5_side.png)
 ![Run Front](docs/images/run_v5_front.png)
@@ -26,8 +26,10 @@ An end-to-end bipedal humanoid project spanning procedural **Three.js** CAD/rigg
 * **Articulation**: `35` active semantic DOFs (`+ 10` coupled finger DOFs + `6` floating-base DOFs) exported to MuJoCo (`34` joints, `33` position servos, `15`-dim onboard sensor suite)
 * **RL Control Policy (`v5`)**: `21`-DOF core locomotion policy (`50 Hz` control at `sim_dt=0.004 s`, `decimation=5`), asymmetric Actor (`74`-dim noisy obs) / Critic (`82`-dim privileged obs), trained with `1024` parallel GPU environments (`MuJoCo-Warp` + `RSL-RL 6.0.0`), featuring bit-exact `yaw = 0° / 180°` observation invariance, `wz_ema` stride-filtered turning, and lateral arm-thigh clearance shaping
 * **Pretrained Models Included** (`mujoco/rl/checkpoints/`):
-  * `latest_walk.pt` / `latest_walk.onnx` (`v5`) — stand (`0.002 m/s`), slow/normal/fast walk (`0.590–1.126 m/s`, `-0.7%` error at `0.9 m/s`), strafe (`vy = +0.227 m/s`), turning (`+0.102 / -0.214 rad/s`), `150 N` push recovery
-  * `latest_run.pt` / `latest_run.onnx` (`v5`) — stand (`0.002 m/s`), jog to fast run (`1.388–2.364 m/s`), genuine zero-force aerial flight (`3.25%` at `2.2 m/s` up to `5.0%` at `2.6 m/s`), turning (`+0.430 / -0.370 rad/s`), `0` self-collisions, `150 N` forward & lateral push recovery
+  * `latest_walk.pt` / `latest_walk.onnx` (`v5`) — stand (`0.002 m/s`), slow/normal/fast forward walk (`0.590–1.126 m/s`, `-0.7%` error at `0.9 m/s`), strafe (`vy = +0.223 m/s`), turning (`+0.102 / -0.214 rad/s`), `150 N` forward push recovery (supported envelope: stand, omni-forward, strafe, turning; continuous backward walking is not supported in `v5`)
+  * `latest_run.pt` / `latest_run.onnx` (`v5`) — stand (`0.002 m/s`), jog to fast run (`1.389–2.364 m/s`), genuine zero-force aerial flight (`3.25%` at `2.2 m/s` up to `5.0%` at `2.6 m/s`), turning (`+0.430 / -0.370 rad/s`), `0` steady-state self-collisions at `2.2–2.4 m/s` (`t = 2–10 s`; `4` / `2` brief startup substeps in `t < 2 s`), `150 N` forward & lateral push recovery
+
+> **Security note**: CPU playback via `latest_*.onnx` uses `onnxruntime` / `onnx` without PyTorch pickle deserialization. Loading `.pt` checkpoints in `play.py` enforces `torch.load(..., weights_only=True)`.
 
 For full architecture diagrams, Phase 1–3 benchmarks, and `v1 -> v5` biomechanical debugging logs, see the **[Technical Report](docs/TECHNICAL_REPORT.md)**.
 
@@ -101,12 +103,16 @@ npm run export:mjcf  # Requires Node >= 22.18; re-exports MJCF & 92 .obj meshes 
 # Phase 1: Re-generate mujoco/scene.xml and validate mass, contacts, drop, and PD stand
 python mujoco/verify_mujoco.py
 
-# Phase 2: Classical closed-loop balance, squat cycles, single-leg weight shift, and ROM audit
+# Phase 2: Classical closed-loop balance, squat cycles, single-leg weight shift, and representative ROM sweep
 python mujoco/phase2_controller.py
 
-# Phase 3: Train Walk (cold-start) or Run (curriculum from Walk) on CUDA GPU (RTX 4070 / CUDA 12.6)
+# Phase 3a: Run reproducible CPU ONNX benchmark & strict CI gate
+python mujoco/rl/eval_benchmark.py --ci
+python mujoco/rl/eval_benchmark.py --full
+
+# Phase 3b: Train Walk (cold-start) or Run (curriculum from Walk) on CUDA GPU (RTX 4070 / CUDA 12.6)
 # Note: latest_walk.pt (v5) supports stable cold-start Walk training + curriculum polish and Run curriculum transfer.
-# By default train.py writes only to mujoco/rl/logs/; pass --update-checkpoints to overwrite curated checkpoints.
+# By default train.py writes only to mujoco/rl/logs/; pass --update-checkpoints to atomically publish verified .pt + .onnx pairs.
 python mujoco/rl/train.py --task walk --num_envs 1024 --max_iterations 220
 python mujoco/rl/train.py --task run --num_envs 1024 --max_iterations 200 --resume mujoco/rl/checkpoints/latest_walk.pt
 ```
@@ -133,7 +139,8 @@ humanoid-robot-prototype/
 │       ├── model_config.py     # Pure MuJoCo/NumPy joint config & PD setup (CPU-safe)
 │       ├── humanoid_env.py     # GPU-vectorized MuJoCo-Warp VecEnv
 │       ├── train.py            # RSL-RL 6.0 PPO trainer + ONNX exporter
-│       ├── play.py             # CPU evaluator (.onnx / .pt) & slow-mo tracking viewer
+│       ├── play.py             # CPU evaluator (.onnx / .pt with weights_only=True) & slow-mo tracking viewer
+│       ├── eval_benchmark.py   # Reproducible CPU benchmark & strict CI gate (--ci / --full)
 │       ├── requirements.txt    # Full GPU RL training dependencies
 │       ├── requirements-viewer.txt # Lightweight CPU/ONNX viewer dependencies
 │       └── checkpoints/        # Pretrained Walk & Run .pt and .onnx policies (~3.85 MB)

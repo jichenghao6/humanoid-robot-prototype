@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+import os
 from pathlib import Path
 import sys
 
@@ -109,20 +110,17 @@ def main() -> int:
     print(f"Starting training: task={args.task}, num_envs={args.num_envs}, iterations={args.max_iterations}, device={device}")
     runner.learn(num_learning_iterations=args.max_iterations, init_at_random_ep_len=True)
 
-    # Export latest checkpoint copy for easy play.py lookup
+    # Export latest checkpoint copy to logs/ first for easy local play.py lookup
     final_ckpt = run_dir / f"model_{runner.current_learning_iteration}.pt"
     ckpt_bytes = final_ckpt.read_bytes()
     latest_ckpt = Path(args.logdir) / f"latest_{args.task}.pt"
     latest_ckpt.write_bytes(ckpt_bytes)
-    curated_dir = THIS_DIR / "checkpoints"
-    if args.update_checkpoints:
-        curated_dir.mkdir(parents=True, exist_ok=True)
-        (curated_dir / f"latest_{args.task}.pt").write_bytes(ckpt_bytes)
-        print(f"Updated curated checkpoint: {curated_dir / f'latest_{args.task}.pt'}")
     print(f"Training complete! Final checkpoint: {final_ckpt}")
     print(f"Saved convenience copy: {latest_ckpt}")
 
-    # Export actor ONNX for portable inference (taking flat 74-dim policy tensor)
+    # Export actor ONNX and validate before publishing curated checkpoints atomically
+    onnx_path = Path(args.logdir) / f"latest_{args.task}.onnx"
+    onnx_ready = False
     try:
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8")
@@ -139,7 +137,6 @@ def main() -> int:
 
         flat_wrapper = _FlatPolicyExport(policy_actor).eval()
         dummy_flat = env.get_observations()["policy"][:1].to("cpu")
-        onnx_path = Path(args.logdir) / f"latest_{args.task}.onnx"
         torch.onnx.export(
             flat_wrapper,
             (dummy_flat,),
@@ -149,13 +146,31 @@ def main() -> int:
             opset_version=18,
             dynamo=False,
         )
-        if args.update_checkpoints:
-            curated_dir.mkdir(parents=True, exist_ok=True)
-            (curated_dir / f"latest_{args.task}.onnx").write_bytes(onnx_path.read_bytes())
-            print(f"Updated curated ONNX: {curated_dir / f'latest_{args.task}.onnx'}")
-        print(f"Exported ONNX policy: {onnx_path}")
+        import onnx
+
+        onnx_model = onnx.load(str(onnx_path))
+        onnx.checker.check_model(onnx_model)
+        onnx_ready = True
+        print(f"Exported & checked ONNX policy: {onnx_path}")
     except Exception as exc:
+        if args.update_checkpoints:
+            print(f"ERROR: ONNX export/check failed under --update-checkpoints; curated checkpoints left untouched: {exc}")
+            return 1
         print(f"Optional ONNX export skipped: {exc}")
+
+    if args.update_checkpoints:
+        if not onnx_ready:
+            print("ERROR: ONNX policy not ready; curated checkpoints left untouched.")
+            return 1
+        curated_dir = THIS_DIR / "checkpoints"
+        curated_dir.mkdir(parents=True, exist_ok=True)
+        tmp_pt = curated_dir / f".tmp_latest_{args.task}.pt"
+        tmp_onnx = curated_dir / f".tmp_latest_{args.task}.onnx"
+        tmp_pt.write_bytes(ckpt_bytes)
+        tmp_onnx.write_bytes(onnx_path.read_bytes())
+        os.replace(tmp_pt, curated_dir / f"latest_{args.task}.pt")
+        os.replace(tmp_onnx, curated_dir / f"latest_{args.task}.onnx")
+        print(f"Atomically updated curated checkpoints: {curated_dir / f'latest_{args.task}.pt'} & .onnx")
 
     return 0
 

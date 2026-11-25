@@ -17,6 +17,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Verify MJCF export matches committed assets
+        run: |
+          npm run export:mjcf
+          git diff --ignore-cr-at-eol --exit-code mujoco/humanoid_robot
+          test -z "$(git ls-files --others --exclude-standard mujoco/humanoid_robot)"
 
   mujoco-cpu:
     runs-on: ubuntu-latest
@@ -29,21 +34,7 @@ jobs:
         run: python -m pip install -r mujoco/rl/requirements-viewer.txt
       - name: Phase 1 MuJoCo physics validation
         run: python mujoco/verify_mujoco.py
-      - name: Phase 2 closed-loop controller & ROM sweep
+      - name: Phase 2 closed-loop controller & representative ROM sweep
         run: python mujoco/phase2_controller.py
-      - name: Phase 3 ONNX CPU rollout smoke tests
-        run: |
-          python -c "
-          from pathlib import Path
-          import sys
-          sys.path.insert(0, 'mujoco/rl')
-          from model_config import SCENE_XML, configure_mj_model_for_rl
-          from play import load_policy, run_eval
-
-          m, def_qpos, def_ctrl = configure_mj_model_for_rl(SCENE_XML)
-          for ckpt, vx in [('latest_walk.onnx', 0.9), ('latest_run.onnx', 2.0)]:
-              fn = load_policy(Path('mujoco/rl/checkpoints') / ckpt, device='cpu')
-              stats = run_eval(fn, m, def_qpos, def_ctrl, vx, 0.0, 0.0, 3.0, False, 0.0)
-              print(ckpt, stats)
-              assert stats['final_z'] > 0.85, f'{ckpt} fell: {stats}'
-          "
+      - name: Phase 3 ONNX CPU benchmark & strict CI gate
+        run: python mujoco/rl/eval_benchmark.py --ci
