@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["mujoco>=3.2.0", "numpy"]
+# dependencies = ["mujoco>=4.0.1", "numpy"]
 # ///
 """Phase 2 Closed-Loop Dynamics Controller for Humanoid Robot in MuJoCo.
 
@@ -52,6 +52,8 @@ class ControllerIndices:
     jnt_v: dict[str, int]
     floor_id: int
     torso_id: int
+    foot_l_id: int
+    foot_r_id: int
 
     @classmethod
     def from_model(cls, model: mujoco.MjModel) -> "ControllerIndices":
@@ -73,6 +75,8 @@ class ControllerIndices:
             jnt_v=jnt_v,
             floor_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor"),
             torso_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso"),
+            foot_l_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "foot_L"),
+            foot_r_id=mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "foot_R"),
         )
 
 
@@ -133,6 +137,7 @@ class HumanoidPhase2Controller:
         right_leg_lift = 0.0
         torso_roll_bias = 0.0
         pelvis_roll_bias = 0.0
+        weight_shift_u = 0.0
 
         if mode == "squat":
             # Smooth 3.2s squat cycle: 12 deg -> 38 deg hip crouch (knee 24 -> 76 deg)
@@ -148,22 +153,21 @@ class HumanoidPhase2Controller:
             # 7s single-leg balance cycle: shift onto left foot -> lift right foot -> set down
             phase = t % 7.0
             if phase < 2.0:
-                u = 0.5 * (1.0 - math.cos(math.pi * phase / 2.0))
+                weight_shift_u = 0.5 * (1.0 - math.cos(math.pi * phase / 2.0))
             elif phase < 5.0:
-                u = 1.0
+                weight_shift_u = 1.0
             else:
-                u = 0.5 * (1.0 + math.cos(math.pi * (phase - 5.0) / 2.0))
+                weight_shift_u = 0.5 * (1.0 + math.cos(math.pi * (phase - 5.0) / 2.0))
 
             if 1.8 < phase < 5.2:
                 lift_u = math.sin(math.pi * (phase - 1.8) / 3.4)
                 right_leg_lift = max(0.0, lift_u) ** 0.85
 
             crouch_deg = 13.0
-            com_y_offset = 0.0 if u < 0.05 else 0.0  # Support target switches smoothly below
             # Negative rotation around +X (front) leans torso & pelvis toward +Y (left)!
-            torso_roll_bias = -14.0 * u
-            pelvis_roll_bias = -6.5 * u
-            self.set_servo_deg(data, "shoulder_L_abd_servo", 24.0 * u)
+            torso_roll_bias = -14.0 * weight_shift_u
+            pelvis_roll_bias = -6.5 * weight_shift_u
+            self.set_servo_deg(data, "shoulder_L_abd_servo", 24.0 * weight_shift_u)
             self.set_servo_deg(data, "shoulder_R_abd_servo", 2.0)
         else:
             # Slight relaxed arms in balance mode
@@ -183,18 +187,12 @@ class HumanoidPhase2Controller:
 
         sole_l = data.site("foot_L_sole_site").xpos
         sole_r = data.site("foot_R_sole_site").xpos
-        ankle_l = data.xpos[mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "foot_L")]
-        ankle_r = data.xpos[mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "foot_R")]
+        ankle_l = data.xpos[self.idx.foot_l_id]
+        ankle_r = data.xpos[self.idx.foot_r_id]
 
         if mode == "weight_shift":
             # Interpolate support target from midpoint (0) to left sole center (ankle_l)
-            phase = t % 7.0
-            if phase < 2.0:
-                u = 0.5 * (1.0 - math.cos(math.pi * phase / 2.0))
-            elif phase < 5.0:
-                u = 1.0
-            else:
-                u = 0.5 * (1.0 + math.cos(math.pi * (phase - 5.0) / 2.0))
+            u = weight_shift_u
             support_x = float(ankle_l[0]) * u + 0.5 * (float(ankle_l[0]) + float(ankle_r[0])) * (1.0 - u)
             support_y = float(ankle_l[1]) * u + 0.5 * (float(ankle_l[1]) + float(ankle_r[1])) * (1.0 - u)
             com_y_offset = 0.004 * u  # Bias slightly toward outer foot edge for robust margin
@@ -349,15 +347,19 @@ def run_headless_suite() -> int:
         f"final_pelvis_z={info['pelvis_z']:.3f}m"
     )
 
-    # 4. Self-collision ROM sweep (root pinned in air by fixing freejoint z=1.5m via xfrc/weld-free check)
+    # 4. Self-collision ROM sweep (pin floating base only so actuated joints reach full ROM)
     data = mujoco.MjData(model)
     data.qpos[2] = 1.5
     unexpected_self_hits: set[tuple[str, str]] = set()
+    max_hip_l = 0.0
+    max_knee_l = 0.0
+    max_sh_l = 0.0
+    max_sh_abd_l = 0.0
     for step in range(400):
         s = step / 400.0
         data.qpos[0:3] = [0.0, 0.0, 1.5]
         data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
-        data.qvel[:] = 0.0
+        data.qvel[:6] = 0.0
         ctrl.set_servo_deg(data, "hip_L_flex_servo", 85.0 * math.sin(math.pi * s))
         ctrl.set_servo_deg(data, "knee_L_flex_servo", 110.0 * s)
         ctrl.set_servo_deg(data, "hip_R_flex_servo", -25.0 * math.sin(math.pi * s))
@@ -369,6 +371,10 @@ def run_headless_suite() -> int:
         ctrl.set_servo_deg(data, "shoulder_R_flex_servo", 120.0 * s)
         ctrl.set_servo_deg(data, "shoulder_R_abd_servo", 80.0 * s)
         mujoco.mj_step(model, data)
+        max_hip_l = max(max_hip_l, abs(float(data.qpos[ctrl.idx.jnt_q["hip_L_flex"]]) / DEG2RAD))
+        max_knee_l = max(max_knee_l, abs(float(data.qpos[ctrl.idx.jnt_q["knee_L_flex"]]) / DEG2RAD))
+        max_sh_l = max(max_sh_l, abs(float(data.qpos[ctrl.idx.jnt_q["shoulder_L_flex"]]) / DEG2RAD))
+        max_sh_abd_l = max(max_sh_abd_l, abs(float(data.qpos[ctrl.idx.jnt_q["shoulder_L_abd"]]) / DEG2RAD))
         for ci in range(data.ncon):
             c = data.contact[ci]
             if c.geom1 != ctrl.idx.floor_id and c.geom2 != ctrl.idx.floor_id:
@@ -377,7 +383,17 @@ def run_headless_suite() -> int:
                 pair = tuple(sorted((g1, g2)))
                 unexpected_self_hits.add(pair)
 
-    print(f"[Phase 2 - 4] ROM self-collision sweep: hits={sorted(unexpected_self_hits)}")
+    print(
+        f"[Phase 2 - 4] ROM self-collision sweep: "
+        f"peak_deg(hip_L={max_hip_l:.1f}, knee_L={max_knee_l:.1f}, sh_L={max_sh_l:.1f}, sh_abd_L={max_sh_abd_l:.1f}), "
+        f"hits={sorted(unexpected_self_hits)}"
+    )
+    if max_hip_l < 70.0 or max_knee_l < 80.0 or max_sh_l < 80.0:
+        raise RuntimeError(
+            f"ROM sweep did not reach expected angles: hip_L={max_hip_l:.1f}, knee_L={max_knee_l:.1f}, sh_L={max_sh_l:.1f}"
+        )
+    if unexpected_self_hits:
+        raise RuntimeError(f"Unexpected self-collisions during ROM sweep: {sorted(unexpected_self_hits)}")
     return 0
 
 

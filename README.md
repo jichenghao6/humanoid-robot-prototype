@@ -37,10 +37,25 @@ For full architecture diagrams, Phase 1–3 benchmarks, and Walk `v1 -> v4` biom
 
 ### 1. Play Pretrained Walk & Run in the 3D MuJoCo Viewer (Auto-Follow + Slow-Mo)
 
-```powershell
-# Create Python 3.12 venv (uv recommended) and install CUDA PyTorch + MuJoCo RL stack
+#### Option A: Lightweight CPU Viewer (Windows / Linux / macOS, ONNX, no CUDA/PyTorch needed)
+
+```bash
 uv venv --python 3.12
-.venv\Scripts\activate
+# Windows PowerShell: .venv\Scripts\activate
+# Linux / macOS:      source .venv/bin/activate
+uv pip install -r mujoco/rl/requirements-viewer.txt
+
+# Launch interactive Walk or Run viewer using portable ONNX policies
+python mujoco/rl/play.py --checkpoint mujoco/rl/checkpoints/latest_walk.onnx --viewer
+python mujoco/rl/play.py --checkpoint mujoco/rl/checkpoints/latest_run.onnx --vx 2.0 --viewer
+```
+
+#### Option B: Full GPU Training & PyTorch Stack (CUDA 12.6)
+
+```bash
+uv venv --python 3.12
+# Windows PowerShell: .venv\Scripts\activate
+# Linux / macOS:      source .venv/bin/activate
 uv pip install torch --index-url https://download.pytorch.org/whl/cu126
 uv pip install -r mujoco/rl/requirements.txt
 
@@ -77,7 +92,7 @@ npm run dev          # http://localhost:5173
 npm run typecheck
 npm test             # 16 unit tests (Vitest)
 npm run build
-npm run export:mjcf  # Re-export MJCF & 92 .obj meshes into mujoco/humanoid_robot/
+npm run export:mjcf  # Requires Node >= 22.18; re-exports MJCF & 92 .obj meshes into mujoco/humanoid_robot/
 ```
 
 ### 3. Physics Validation & Retraining from Scratch
@@ -90,6 +105,8 @@ python mujoco/verify_mujoco.py
 python mujoco/phase2_controller.py
 
 # Phase 3: Train Walk or Run on CUDA GPU (RTX 4070 / CUDA 12.6)
+# Note: latest_walk.pt (v4) was fine-tuned via curriculum resume (v1 -> v4); cold-start training may need tuning.
+# By default train.py writes only to mujoco/rl/logs/; pass --update-checkpoints to overwrite curated checkpoints.
 python mujoco/rl/train.py --task walk --num_envs 1024 --max_iterations 220
 python mujoco/rl/train.py --task run --num_envs 1024 --max_iterations 240 --resume mujoco/rl/checkpoints/latest_walk.pt
 ```
@@ -100,6 +117,7 @@ python mujoco/rl/train.py --task run --num_envs 1024 --max_iterations 240 --resu
 
 ```text
 humanoid-robot-prototype/
+├── .github/workflows/ci.yml    # Web build/tests + MuJoCo CPU & ONNX CI checks
 ├── src/                        # Three.js procedural robot builder, rig, UI & kinematics
 ├── scripts/export-mjcf.ts      # Three.js -> MuJoCo MJCF + .obj exporter
 ├── tests/robot.test.ts         # Vitest structural, mirror symmetry & kinematics tests
@@ -112,10 +130,12 @@ humanoid-robot-prototype/
 │   ├── phase2_controller.py    # Phase 2 closed-loop IMU/CoM controller & tests
 │   ├── scene.xml               # Standalone MuJoCo scene (with tracking cameras)
 │   └── rl/
+│       ├── model_config.py     # Pure MuJoCo/NumPy joint config & PD setup (CPU-safe)
 │       ├── humanoid_env.py     # GPU-vectorized MuJoCo-Warp VecEnv
 │       ├── train.py            # RSL-RL 6.0 PPO trainer + ONNX exporter
-│       ├── play.py             # CPU evaluator & slow-mo tracking viewer
-│       ├── requirements.txt    # Python RL dependencies
+│       ├── play.py             # CPU evaluator (.onnx / .pt) & slow-mo tracking viewer
+│       ├── requirements.txt    # Full GPU RL training dependencies
+│       ├── requirements-viewer.txt # Lightweight CPU/ONNX viewer dependencies
 │       └── checkpoints/        # Pretrained Walk & Run .pt and .onnx policies (~3.85 MB)
 ├── LICENSE                     # MIT License
 └── .gitignore                  # Excludes .venv, node_modules, dist, and training logs

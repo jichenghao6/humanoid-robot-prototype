@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  mujoco-cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install CPU viewer & ONNX dependencies
+        run: python -m pip install -r mujoco/rl/requirements-viewer.txt
+      - name: Phase 1 MuJoCo physics validation
+        run: python mujoco/verify_mujoco.py
+      - name: Phase 2 closed-loop controller & ROM sweep
+        run: python mujoco/phase2_controller.py
+      - name: Phase 3 ONNX CPU rollout smoke tests
+        run: |
+          python -c "
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'mujoco/rl')
+          from model_config import SCENE_XML, configure_mj_model_for_rl
+          from play import load_policy, run_eval
+
+          m, def_qpos, def_ctrl = configure_mj_model_for_rl(SCENE_XML)
+          for ckpt, vx in [('latest_walk.onnx', 0.9), ('latest_run.onnx', 2.0)]:
+              fn = load_policy(Path('mujoco/rl/checkpoints') / ckpt, device='cpu')
+              stats = run_eval(fn, m, def_qpos, def_ctrl, vx, 0.0, 0.0, 3.0, False, 0.0)
+              print(ckpt, stats)
+              assert stats['final_z'] > 0.85, f'{ckpt} fell: {stats}'
+          "

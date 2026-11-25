@@ -1,5 +1,7 @@
-# GPU RL stack for Humanoid Robot Prototype (tested on Windows + RTX 4070 Laptop GPU, CUDA 12.6, Python 3.12)
-# Install PyTorch CUDA wheel first, e.g.:
+# GPU RL training stack for Humanoid Robot Prototype (tested on Windows + RTX 4070 Laptop GPU, CUDA 12.6, Python 3.12)
+# For CPU-only playback & ONNX viewing (no CUDA/PyTorch/Warp needed), install requirements-viewer.txt instead:
+#   uv pip install -r mujoco/rl/requirements-viewer.txt
+# For full GPU training, install PyTorch CUDA wheel first, e.g.:
 #   uv pip install torch --index-url https://download.pytorch.org/whl/cu126
 
 mujoco>=4.0.1

@@ -3,8 +3,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { createMaterialBank } from '../src/config/materials.ts';
-import { PARTS_CATALOG, type PartCatalogEntry } from '../src/config/partsCatalog.ts';
-import { RIG_JOINTS, RIG_JOINT_MAP, type JointDef, type Side } from '../src/config/rig.ts';
+import type { PartCatalogEntry } from '../src/config/partsCatalog.ts';
+import { RIG_JOINTS, RIG_JOINT_MAP, type Side } from '../src/config/rig.ts';
 import { PartRegistry } from '../src/robot/PartRegistry.ts';
 import { RobotAssembler } from '../src/robot/RobotAssembler.ts';
 import { RobotRig } from '../src/robot/RobotRig.ts';
@@ -31,6 +31,8 @@ type ColliderSpec =
       pos: Vec3;
       radius: number;
       rgba?: string;
+      condim?: number;
+      friction?: string;
     }
   | {
       name: string;
@@ -588,7 +590,7 @@ function renderBodyXml(
       );
     } else if (col.type === 'sphere') {
       lines.push(
-        `${indent}  <geom name="${col.name}" class="collision" type="sphere" pos="${fmtVec(col.pos)}" size="${fmt(col.radius)}" mass="${fmt(mass)}"${rgbaAttr}/>`,
+        `${indent}  <geom name="${col.name}" class="collision" type="sphere" pos="${fmtVec(col.pos)}" size="${fmt(col.radius)}" mass="${fmt(mass)}"${condimAttr}${fricAttr}${rgbaAttr}/>`,
       );
     } else {
       lines.push(

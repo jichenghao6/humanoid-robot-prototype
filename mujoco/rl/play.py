@@ -1,34 +1,68 @@
-"""Play & evaluate trained RSL-RL Walk/Run policy on standard CPU MuJoCo viewer."""
+"""Play & evaluate trained Walk/Run policy (.onnx CPU or .pt PyTorch) in MuJoCo."""
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import math
 from pathlib import Path
 import sys
 import threading
 import time
+from typing import Callable
 
 import mujoco
 import numpy as np
-from tensordict import TensorDict
-import torch
 
 THIS_DIR = Path(__file__).resolve().parent
 if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
-from rsl_rl.models import MLPModel
-
-from humanoid_env import (
+from model_config import (
     ACTION_JOINT_NAMES,
     SCENE_XML,
     configure_mj_model_for_rl,
-    quat_rotate_inverse,
+    quat_rotate_inverse_np,
 )
 
 
-def load_policy(ckpt_path: Path, model: mujoco.MjModel, device: str = "cpu") -> tuple[MLPModel, dict]:
+def load_policy(ckpt_path: Path, device: str = "cpu") -> Callable[[np.ndarray], np.ndarray]:
+    """Loads a .onnx (CPU via onnxruntime/onnx) or .pt (RSL-RL MLPModel) policy into a callable."""
+    suffix = ckpt_path.suffix.lower()
+    if suffix == ".onnx":
+        try:
+            import onnxruntime as ort
+
+            sess = ort.InferenceSession(str(ckpt_path), providers=["CPUExecutionProvider"])
+            input_name = sess.get_inputs()[0].name
+
+            def infer_ort(obs_np: np.ndarray) -> np.ndarray:
+                out = sess.run(None, {input_name: obs_np.astype(np.float32, copy=False)})[0]
+                return np.asarray(out, dtype=np.float32).reshape(-1)
+
+            return infer_ort
+        except ImportError:
+            try:
+                from onnx.reference import ReferenceEvaluator
+            except ImportError as exc:
+                raise ImportError(
+                    "ONNX inference requires 'onnxruntime' or 'onnx'. "
+                    "Install with: pip install -r mujoco/rl/requirements-viewer.txt"
+                ) from exc
+
+            ref_sess = ReferenceEvaluator(str(ckpt_path))
+            input_name = ref_sess.input_names[0]
+
+            def infer_ref(obs_np: np.ndarray) -> np.ndarray:
+                out = ref_sess.run(None, {input_name: obs_np.astype(np.float32, copy=False)})[0]
+                return np.asarray(out, dtype=np.float32).reshape(-1)
+
+            return infer_ref
+
+    import torch
+    from rsl_rl.models import MLPModel
+    from tensordict import TensorDict
+
     ckpt = torch.load(str(ckpt_path), map_location=device, weights_only=False)
     num_actions = len(ACTION_JOINT_NAMES)
     obs_dim = 74
@@ -55,7 +89,15 @@ def load_policy(ckpt_path: Path, model: mujoco.MjModel, device: str = "cpu") -> 
     ).to(device)
     actor.load_state_dict(ckpt["actor_state_dict"])
     actor.eval()
-    return actor, ckpt
+
+    def infer_pt(obs_np: np.ndarray) -> np.ndarray:
+        obs_t = torch.from_numpy(obs_np).to(device=device, dtype=torch.float32)
+        obs_td = TensorDict({"policy": obs_t}, batch_size=[obs_t.shape[0]], device=device)
+        with torch.inference_mode():
+            act = actor(obs_td).squeeze(0).cpu().numpy()
+        return np.asarray(act, dtype=np.float32).reshape(-1)
+
+    return infer_pt
 
 
 def build_joint_indices(m: mujoco.MjModel, default_ctrl_np: np.ndarray) -> dict:
@@ -92,40 +134,41 @@ def make_policy_obs(
     cmd: np.ndarray,
     gait_phase: float,
     last_actions: np.ndarray,
-) -> TensorDict:
-    quat = torch.tensor(data.qpos[3:7], dtype=torch.float32).unsqueeze(0)
-    ang_vel = quat_rotate_inverse(quat, torch.tensor(data.qvel[3:6], dtype=torch.float32).unsqueeze(0)).squeeze(0)
-    proj_grav = quat_rotate_inverse(quat, torch.tensor([[0.0, 0.0, -1.0]], dtype=torch.float32)).squeeze(0)
+) -> np.ndarray:
+    quat = np.asarray(data.qpos[3:7], dtype=np.float64)
+    # TODO(v5): MuJoCo free-joint qvel[3:6] is already in body frame; kept for v4 checkpoint compatibility.
+    ang_vel = quat_rotate_inverse_np(quat, data.qvel[3:6])
+    proj_grav = quat_rotate_inverse_np(quat, np.array([0.0, 0.0, -1.0], dtype=np.float64))
 
-    q_act = torch.tensor(data.qpos[idx["qpos_idx"]] - idx["default_act_pos"], dtype=torch.float32)
-    dq_act = torch.tensor(data.qvel[idx["qvel_idx"]], dtype=torch.float32)
+    q_act = (data.qpos[idx["qpos_idx"]] - idx["default_act_pos"]).astype(np.float32)
+    dq_act = data.qvel[idx["qvel_idx"]].astype(np.float32)
 
     cmd_speed = float(np.linalg.norm(cmd))
     moving = 1.0 if cmd_speed > 0.08 else 0.0
     phase_rad = 2.0 * math.pi * gait_phase
-    gait_clock = torch.tensor([math.sin(phase_rad) * moving, math.cos(phase_rad) * moving], dtype=torch.float32)
+    gait_clock = np.array([math.sin(phase_rad) * moving, math.cos(phase_rad) * moving], dtype=np.float32)
 
-    cmd_t = torch.tensor([cmd[0], cmd[1], cmd[2] * 0.5], dtype=torch.float32)
-    act_t = torch.tensor(last_actions, dtype=torch.float32)
+    cmd_arr = np.array([cmd[0], cmd[1], cmd[2] * 0.5], dtype=np.float32)
+    act_arr = np.asarray(last_actions, dtype=np.float32)
 
-    obs_vec = torch.cat(
+    obs_vec = np.concatenate(
         [
             ang_vel * 0.25,
             proj_grav,
-            cmd_t,
+            cmd_arr,
             gait_clock,
             q_act,
             dq_act * 0.05,
-            act_t,
+            act_arr,
         ],
-        dim=-1,
-    ).unsqueeze(0)
+        axis=-1,
+    ).astype(np.float32, copy=False)
 
-    return TensorDict({"policy": obs_vec}, batch_size=[1])
+    return obs_vec[None, :]
 
 
 def run_eval(
-    actor: MLPModel,
+    policy_fn: Callable[[np.ndarray], np.ndarray],
     m: mujoco.MjModel,
     default_qpos: np.ndarray,
     default_ctrl: np.ndarray,
@@ -162,10 +205,8 @@ def run_eval(
     ) -> None:
         nonlocal gait_phase, last_actions
         t_cur = step_idx * control_dt
-        obs_td = make_policy_obs(data, idx, cmd, gait_phase, last_actions)
-        with torch.inference_mode():
-            act = actor(obs_td).squeeze(0).cpu().numpy()
-        act = np.clip(act, -3.0, 3.0)
+        obs_np = make_policy_obs(data, idx, cmd, gait_phase, last_actions)
+        act = np.clip(policy_fn(obs_np), -3.0, 3.0)
         last_actions = act.astype(np.float32)
 
         ctrl_target = idx["default_ctrl"].copy()
@@ -295,10 +336,7 @@ def run_eval(
                         if v.cam.type != mujoco.mjtCamera.mjCAMERA_TRACKING:
                             apply_follow_cam(v.cam, zoom_dist)
 
-                quat = torch.tensor(data.qpos[3:7], dtype=torch.float32).unsqueeze(0)
-                v_body = quat_rotate_inverse(
-                    quat, torch.tensor(data.qvel[0:3], dtype=torch.float32).unsqueeze(0)
-                ).squeeze(0)
+                v_body = quat_rotate_inverse_np(data.qpos[3:7], data.qvel[0:3])
                 act_vx = float(v_body[0])
                 cam_type = v.cam.type
                 if cam_type == mujoco.mjtCamera.mjCAMERA_TRACKING:
@@ -330,14 +368,15 @@ def run_eval(
 
     total_steps = int(round(duration_s / control_dt))
     vel_x_hist = []
+    wz_hist = []
     min_z = 999.0
     for s in range(total_steps):
         step_once(s)
         min_z = min(min_z, float(data.qpos[2]))
         if s > 25:
-            quat = torch.tensor(data.qpos[3:7], dtype=torch.float32).unsqueeze(0)
-            v_body = quat_rotate_inverse(quat, torch.tensor(data.qvel[0:3], dtype=torch.float32).unsqueeze(0)).squeeze(0)
+            v_body = quat_rotate_inverse_np(data.qpos[3:7], data.qvel[0:3])
             vel_x_hist.append(float(v_body[0]))
+            wz_hist.append(float(data.qvel[5]))
 
     return {
         "final_x": float(data.qpos[0]),
@@ -345,14 +384,30 @@ def run_eval(
         "final_z": float(data.qpos[2]),
         "min_z": min_z,
         "mean_vx": float(np.mean(vel_x_hist)) if vel_x_hist else 0.0,
+        "mean_wz": float(np.mean(wz_hist)) if wz_hist else 0.0,
     }
 
 
+def _resolve_default_checkpoint() -> Path:
+    has_torch_stack = (
+        importlib.util.find_spec("torch") is not None
+        and importlib.util.find_spec("rsl_rl") is not None
+        and importlib.util.find_spec("tensordict") is not None
+    )
+    pt_ckpt = THIS_DIR / "checkpoints" / "latest_walk.pt"
+    onnx_ckpt = THIS_DIR / "checkpoints" / "latest_walk.onnx"
+    if has_torch_stack and pt_ckpt.exists():
+        return pt_ckpt
+    if onnx_ckpt.exists():
+        return onnx_ckpt
+    if pt_ckpt.exists():
+        return pt_ckpt
+    return THIS_DIR / "logs" / "latest_walk.pt"
+
+
 def main() -> int:
-    default_ckpt = THIS_DIR / "checkpoints" / "latest_walk.pt"
-    if not default_ckpt.exists():
-        default_ckpt = THIS_DIR / "logs" / "latest_walk.pt"
-    parser = argparse.ArgumentParser(description="Evaluate or view trained humanoid_robot RL policy")
+    default_ckpt = _resolve_default_checkpoint()
+    parser = argparse.ArgumentParser(description="Evaluate or view trained humanoid_robot RL policy (.onnx or .pt)")
     parser.add_argument("--checkpoint", type=str, default=str(default_ckpt))
     parser.add_argument("--vx", type=float, default=0.9)
     parser.add_argument("--vy", type=float, default=0.0)
@@ -383,9 +438,9 @@ def main() -> int:
 
     speed_scale = args.speed if args.speed is not None else (0.40 if args.viewer else 1.0)
     m, default_qpos, default_ctrl = configure_mj_model_for_rl(SCENE_XML)
-    actor, _ = load_policy(ckpt_path, m, device="cpu")
+    policy_fn = load_policy(ckpt_path, device="cpu")
     stats = run_eval(
-        actor,
+        policy_fn,
         m,
         default_qpos,
         default_ctrl,

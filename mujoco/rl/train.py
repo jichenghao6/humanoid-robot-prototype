@@ -75,6 +75,11 @@ def main() -> int:
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to continue/curriculum-train from")
     parser.add_argument("--logdir", type=str, default=str(THIS_DIR / "logs"))
     parser.add_argument("--no_pushes", action="store_true")
+    parser.add_argument(
+        "--update-checkpoints",
+        action="store_true",
+        help="Also overwrite tracked mujoco/rl/checkpoints/latest_{task}.{pt,onnx} after training",
+    )
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -110,9 +115,10 @@ def main() -> int:
     latest_ckpt = Path(args.logdir) / f"latest_{args.task}.pt"
     latest_ckpt.write_bytes(ckpt_bytes)
     curated_dir = THIS_DIR / "checkpoints"
-    if Path(args.logdir).resolve() == (THIS_DIR / "logs").resolve():
+    if args.update_checkpoints:
         curated_dir.mkdir(parents=True, exist_ok=True)
         (curated_dir / f"latest_{args.task}.pt").write_bytes(ckpt_bytes)
+        print(f"Updated curated checkpoint: {curated_dir / f'latest_{args.task}.pt'}")
     print(f"Training complete! Final checkpoint: {final_ckpt}")
     print(f"Saved convenience copy: {latest_ckpt}")
 
@@ -143,8 +149,10 @@ def main() -> int:
             opset_version=18,
             dynamo=False,
         )
-        if Path(args.logdir).resolve() == (THIS_DIR / "logs").resolve():
+        if args.update_checkpoints:
+            curated_dir.mkdir(parents=True, exist_ok=True)
             (curated_dir / f"latest_{args.task}.onnx").write_bytes(onnx_path.read_bytes())
+            print(f"Updated curated ONNX: {curated_dir / f'latest_{args.task}.onnx'}")
         print(f"Exported ONNX policy: {onnx_path}")
     except Exception as exc:
         print(f"Optional ONNX export skipped: {exc}")

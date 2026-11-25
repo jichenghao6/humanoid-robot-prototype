@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["mujoco>=3.2.0", "numpy"]
+# dependencies = ["mujoco>=4.0.1", "numpy"]
 # ///
 """Build interactive scene.xml via MjSpec and validate Phase 1 MuJoCo physics."""
 
@@ -162,8 +162,9 @@ def check_bind_pose_contacts(model: mujoco.MjModel) -> None:
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 
-    aabb_min_z = np.min(data.geom_xpos[:, 2])
     floor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    robot_geom_z = [float(data.geom_xpos[i, 2]) for i in range(model.ngeom) if i != floor_id]
+    min_robot_geom_z = min(robot_geom_z) if robot_geom_z else 0.0
 
     non_floor_contacts = []
     floor_contacts = []
@@ -177,7 +178,7 @@ def check_bind_pose_contacts(model: mujoco.MjModel) -> None:
         else:
             non_floor_contacts.append((g1, g2, float(c.dist)))
 
-    print(f"[1] Bind pose check: ncon={data.ncon}, min_geom_center_z={aabb_min_z:.4f}")
+    print(f"[1] Bind pose check: ncon={data.ncon}, min_robot_geom_center_z={min_robot_geom_z:.4f}")
     print(f"    Floor contacts: {floor_contacts}")
     if non_floor_contacts:
         raise RuntimeError(f"Unexpected self-collisions at bind pose: {non_floor_contacts}")
@@ -185,7 +186,6 @@ def check_bind_pose_contacts(model: mujoco.MjModel) -> None:
 
 def check_passive_gravity_drop(model: mujoco.MjModel) -> None:
     """Disables actuators and drops robot under gravity to check collision & numerical stability."""
-    data = mujoco.MjData(model)
     # Disable position servo torque by zeroing gainprm on runtime copy
     m_passive = mujoco.MjModel.from_xml_path(str(SCENE_XML))
     m_passive.actuator_gainprm[:, :] = 0.0

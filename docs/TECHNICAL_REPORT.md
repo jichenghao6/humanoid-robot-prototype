@@ -32,7 +32,7 @@ Defined in `src/config/proportions.ts`, `src/config/partsCatalog.ts`, and `src/c
 | Total Mass | `81.40 kg` (`79–83 kg` BOM budget) | `model.xml` / `verify_mujoco.py` |
 | Part Hierarchy | `57` parts across `35` entry types (`Tier 1/2/3`) | `PARTS_CATALOG` |
 | Three.js Active Semantic DOFs | `35` (`9` torso, `12` arm, `14` leg) + `10` finger coupling + `6` floating-base | `computeRigDofStats()` |
-| MuJoCo Exported Model | `nbody=18`, `njnt=34`, `nq=40`, `nv=39`, `nu=33` position servos | `mujoco/scene.xml` |
+| MuJoCo Exported Model | `nbody=18`, `njnt=34`, `nq=40`, `nv=39`, `nu=33` position servos (`toe_L`/`toe_R` merged into rigid feet) | `mujoco/scene.xml` |
 | Onboard Sensors (`15`-dim) | `pelvis_quat[4]`, `pelvis_gyro[3]`, `pelvis_acc[3]`, `robot_com[3]`, `foot_L_touch[1]`, `foot_R_touch[1]` | `mujoco/scene.xml` |
 
 Key segment proportions (`src/config/proportions.ts`):
@@ -70,7 +70,7 @@ Generated programmatically via `mujoco.MjSpec` in `mujoco/verify_mujoco.py`:
 ### Phase 1 (`mujoco/verify_mujoco.py`)
 
 Verified static and passive structural validity after scene generation:
-1. **Bind-pose clearance**: `ncon=0`, `min_geom_center_z=0.0000` (clean ground spawn at `z=1.050 m` with zero initial self-collisions).
+1. **Bind-pose clearance**: `ncon=0`, `min_robot_geom_center_z=0.0180` (excluding floor plane; clean ground spawn at `z=1.050 m` with zero initial self-collisions).
 2. **Passive drop (`2.5 s` from `z=1.25 m`, actuators zeroed)**: no `NaN/Inf`, settled cleanly at `final pelvis_z=0.443 m`, `min_body_z=0.038 m`.
 3. **Neutral PD stand (`5.0 s`, `ctrl=0`) + `250 N` chest push**: held `pelvis_z=1.039 m` with balanced foot loads `(399.3 N, 399.4 N)` before the push, and fell forward stably under a `250 N / 0.30 s` impulse (`pelvis_x=1.383 m`, `pelvis_z=0.099 m`) without numerical blowup.
 
@@ -175,27 +175,35 @@ All checks below ran after the final edit to `mujoco/rl/humanoid_env.py` on stan
 
 ### 6.1 Walk Policy (`mujoco/rl/checkpoints/latest_walk.pt`)
 
-| Scenario | Command `[vx, vy, wz]` | Duration | Actual `mean_vx` | Final `(x, y)` | Pelvis `(min_z / final_z)` |
-| --- | --- | --- | --- | --- | --- |
-| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `0.0002 m/s` | `(-0.004, -0.007) m` | `1.021 / 1.032 m` |
-| Slow Walk | `[0.55, 0.0, 0.0]` | `10 s` | `0.657 m/s` | `(6.130, 1.114) m` | `1.010 / 1.033 m` |
-| Normal Walk | `[0.9, 0.0, 0.0]` | `10 s` | `1.081 m/s` | `(10.184, 1.239) m` | `0.997 / 1.030 m` |
-| Fast Walk | `[1.25, 0.0, 0.0]` | `10 s` | `1.365 m/s` | `(13.041, -0.340) m` | `0.978 / 1.023 m` |
-| Walk + `150 N` Push | `[0.9, 0.0, 0.0]` (`150 N @ 3.0..3.2s`) | `10 s` | `1.075 m/s` | `(10.336, -0.210) m` | `0.909 / 1.031 m` |
-| Turning Walk | `[0.8, 0.0, 0.5]` | `10 s` | `0.978 m/s` | `(5.808, 5.869) m` | `1.003 / 1.049 m` |
+| Scenario | Command `[vx, vy, wz]` | Duration | Actual `mean_vx` | Actual `mean_wz` | Final `(x, y)` | Pelvis `(min_z / final_z)` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `0.000 m/s` | `-0.004 rad/s` | `(-0.004, -0.007) m` | `1.021 / 1.032 m` |
+| Slow Walk | `[0.55, 0.0, 0.0]` | `10 s` | `0.657 m/s` | `+0.057 rad/s` | `(6.130, 1.114) m` | `1.010 / 1.033 m` |
+| Normal Walk | `[0.9, 0.0, 0.0]` | `10 s` | `1.081 m/s` | `+0.045 rad/s` | `(10.184, 1.239) m` | `0.997 / 1.030 m` |
+| Fast Walk | `[1.25, 0.0, 0.0]` | `10 s` | `1.365 m/s` | `+0.015 rad/s` | `(13.041, -0.340) m` | `0.978 / 1.023 m` |
+| Walk + `150 N` Push | `[0.9, 0.0, 0.0]` (`150 N @ 3.0..3.2s`) | `10 s` | `1.075 m/s` | `+0.013 rad/s` | `(10.336, -0.210) m` | `0.909 / 1.031 m` |
+| Turning Walk | `[0.8, 0.0, 0.5]` | `10 s` | `0.978 m/s` | `+0.169 rad/s` | `(5.808, 5.869) m` | `1.003 / 1.049 m` |
 
 ### 6.2 Run Policy (`mujoco/rl/checkpoints/latest_run.pt`)
 
-| Scenario | Command `[vx, vy, wz]` | Duration | Actual `mean_vx` | Final `(x, y)` | Pelvis `(min_z / final_z)` |
-| --- | --- | --- | --- | --- | --- |
-| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `0.034 m/s` | `(0.324, 0.101) m` | `0.977 / 0.979 m` |
-| Jog | `[1.4, 0.0, 0.0]` | `10 s` | `1.430 m/s` | `(13.588, -1.886) m` | `0.987 / 1.016 m` |
-| Run | `[2.0, 0.0, 0.0]` | `10 s` | `2.094 m/s` | `(19.560, -3.692) m` | `0.950 / 0.967 m` |
-| Fast Run | `[2.4, 0.0, 0.0]` | `10 s` | `2.339 m/s` | `(22.190, -1.914) m` | `0.929 / 0.929 m` |
-| Run + `150 N` Push | `[2.0, 0.0, 0.0]` (`150 N @ 3.0..3.2s`) | `10 s` | `2.141 m/s` | `(20.258, -2.302) m` | `0.926 / 0.963 m` |
-| Turning Run | `[1.8, 0.0, 0.5]` | `10 s` | `1.874 m/s` | `(15.333, 8.461) m` | `0.964 / 1.004 m` |
+| Scenario | Command `[vx, vy, wz]` | Duration | Actual `mean_vx` | Actual `mean_wz` | Final `(x, y)` | Pelvis `(min_z / final_z)` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `0.030 m/s` | `-0.062 rad/s` | `(0.304, 0.122) m` | `0.992 / 1.014 m` |
+| Jog | `[1.4, 0.0, 0.0]` | `10 s` | `1.426 m/s` | `-0.022 rad/s` | `(13.567, -1.810) m` | `0.990 / 1.016 m` |
+| Run | `[2.0, 0.0, 0.0]` | `10 s` | `2.105 m/s` | `-0.036 rad/s` | `(19.818, -3.048) m` | `0.950 / 0.967 m` |
+| Fast Run | `[2.4, 0.0, 0.0]` | `10 s` | `2.341 m/s` | `-0.029 rad/s` | `(22.196, -1.982) m` | `0.931 / 0.938 m` |
+| Run + `150 N` Push | `[2.0, 0.0, 0.0]` (`150 N @ 3.0..3.2s`) | `10 s` | `2.142 m/s` | `-0.025 rad/s` | `(20.359, -1.737) m` | `0.926 / 0.960 m` |
+| Turning Run | `[1.8, 0.0, 0.5]` | `10 s` | `1.875 m/s` | `+0.081 rad/s` | `(15.345, 8.447) m` | `0.964 / 1.006 m` |
 
 ### 6.3 Software, Build & Model Checks
 
 * **ONNX Runtime Contract**: Both `latest_walk.onnx` and `latest_run.onnx` (`280.9 KB` each) pass `onnx.checker.check_model` with input `obs: [1, 74]` and output `actions: [1, 21]`.
 * **Web Prototype & TypeScript**: `npm run typecheck`, `npm test` (`16/16` in `tests/robot.test.ts`), and `npm run build` pass cleanly (`rc=0`).
+
+### 6.4 Known Limitations & v5 Roadmap
+
+1. **Free-joint angular velocity frame (`qvel[:, 3:6]`)**: In MuJoCo, `free` joint `qvel[3:6]` is already expressed in the body frame, whereas `humanoid_env.py` and `play.py` currently pass it through `quat_rotate_inverse` (kept as-is for `v4` checkpoint compatibility). Removing this extra rotation and retraining in `v5` will make angular-velocity observations yaw-invariant.
+2. **Turning yaw-rate under-response**: Unconditional `hip_twist` (`-16.0`), `spine_lower_twist` (`-6.0`), and foot-track Y penalties restrict yaw turning (`+0.169 rad/s` on Walk `wz=0.5`, `+0.081 rad/s` on Run `wz=0.5`). `v5` will relax twist/track penalties proportionally when `|cmd_wz| > 0` or `|cmd_vy| > 0`.
+3. **Speed overshoot (`~+20%` in Walk)**: The clamped `speed_ratio` term inside `rew_lin_vel` and `motion_gate` creates an asymmetric gradient around `cmd_vx`. `v5` will center tracking around the exact commanded velocity and decouple `motion_gate` from `speed_ratio` clipping.
+4. **Light hand/forearm-to-thigh brushing**: Tight `shoulder_abd` (`0.04 rad`) causes brief `2–14 mm` hand/forearm-to-thigh grazing contacts during vigorous swing. `v5` will widen neutral shoulder abduction (`0.10–0.14 rad`) and add a non-foot self-contact penalty.
+5. **Reset touch-sensor clearing & `njmax`**: `v5` will explicitly zero `sensordata` touch channels on `_reset_idx` and raise `njmax_per_env` from `64` to `96–128` to prevent constraint overflow during early-training falls.
