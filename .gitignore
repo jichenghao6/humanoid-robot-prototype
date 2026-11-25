@@ -1,0 +1,19 @@
+# Python & CUDA virtual environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node / Vite build artifacts
+node_modules/
+dist/
+
+# RL training logs, TensorBoard events, and intermediate checkpoints
+mujoco/rl/logs/
+
+# Temporary MuJoCo/Warp/OS files
+MUJOCO_LOG.TXT
+mjmodel.xml
+.DS_Store
+Thumbs.db

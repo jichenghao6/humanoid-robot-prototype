@@ -1,0 +1,391 @@
+<mujoco model="humanoid_robot_scene">
+  <compiler angle="radian" meshdir="humanoid_robot/meshes" autolimits="true" />
+  <option integrator="discrete" />
+  <visual>
+    <global offwidth="1280" offheight="1280" />
+  </visual>
+  <default>
+    <default class="humanoid_robot">
+      <joint solreflimit="0.005" armature="0.02" damping="1" frictionloss="0.1" />
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" density="0" mass="0" />
+      </default>
+      <default class="collision">
+        <geom condim="4" group="3" friction="0.85 0.02 0.005" solref="0.005" solimp="0.95 0.99" rgba="0.2 0.75 0.35 0.45" />
+      </default>
+    </default>
+  </default>
+  <asset>
+    <texture type="skybox" colorspace="auto" name="skybox" builtin="gradient" rgb1="0.06 0.1 0.17" rgb2="0.01 0.02 0.04" width="512" height="3072" />
+    <texture type="2d" colorspace="auto" name="floor_grid" builtin="checker" mark="edge" rgb1="0.14 0.18 0.24" rgb2="0.09 0.12 0.17" markrgb="0.3 0.65 0.95" width="512" height="512" />
+    <material name="floor_mat" texture="floor_grid" texrepeat="12 12" texuniform="true" reflectance="0.25" />
+    <material name="mat_A" specular="0.6" metallic="0.1" roughness="0.3" rgba="0.902 0.925 0.961 1" />
+    <material name="mat_B" specular="0.35" metallic="0.28" roughness="0.36" rgba="0.725 0.769 0.824 1" />
+    <material name="mat_C" specular="0.3" metallic="0.8" roughness="0.42" rgba="0.114 0.133 0.173 1" />
+    <material name="mat_D" specular="0.9" metallic="0.15" roughness="0.06" rgba="0.024 0.035 0.063 1" />
+    <material name="mat_E" emission="2" metallic="0" roughness="0.2" rgba="0.306 0.647 0.949 1" />
+    <material name="mat_F" specular="0.4" metallic="0.85" roughness="0.3" rgba="0.231 0.267 0.329 1" />
+    <material name="mat_copper" metallic="0.88" roughness="0.28" rgba="0.831 0.541 0.29 1" />
+    <material name="mat_chrome" specular="0.75" metallic="0.94" roughness="0.16" rgba="0.847 0.878 0.922 1" />
+    <mesh name="humanoid_robot_A_vis" content_type="model/obj" file="humanoid_robot_A.obj" inertia="shell" />
+    <mesh name="humanoid_robot_B_vis" content_type="model/obj" file="humanoid_robot_B.obj" inertia="shell" />
+    <mesh name="humanoid_robot_C_vis" content_type="model/obj" file="humanoid_robot_C.obj" inertia="shell" />
+    <mesh name="humanoid_robot_F_vis" content_type="model/obj" file="humanoid_robot_F.obj" inertia="shell" />
+    <mesh name="humanoid_robot_copper_vis" content_type="model/obj" file="humanoid_robot_copper.obj" inertia="shell" />
+    <mesh name="lumbar_waist_C_vis" content_type="model/obj" file="lumbar_waist_C.obj" inertia="shell" />
+    <mesh name="lumbar_waist_E_vis" content_type="model/obj" file="lumbar_waist_E.obj" inertia="shell" />
+    <mesh name="lumbar_waist_F_vis" content_type="model/obj" file="lumbar_waist_F.obj" inertia="shell" />
+    <mesh name="lumbar_waist_chrome_vis" content_type="model/obj" file="lumbar_waist_chrome.obj" inertia="shell" />
+    <mesh name="torso_A_vis" content_type="model/obj" file="torso_A.obj" inertia="shell" />
+    <mesh name="torso_B_vis" content_type="model/obj" file="torso_B.obj" inertia="shell" />
+    <mesh name="torso_C_vis" content_type="model/obj" file="torso_C.obj" inertia="shell" />
+    <mesh name="torso_E_vis" content_type="model/obj" file="torso_E.obj" inertia="shell" />
+    <mesh name="torso_F_vis" content_type="model/obj" file="torso_F.obj" inertia="shell" />
+    <mesh name="torso_chrome_vis" content_type="model/obj" file="torso_chrome.obj" inertia="shell" />
+    <mesh name="torso_copper_vis" content_type="model/obj" file="torso_copper.obj" inertia="shell" />
+    <mesh name="neck_C_vis" content_type="model/obj" file="neck_C.obj" inertia="shell" />
+    <mesh name="neck_F_vis" content_type="model/obj" file="neck_F.obj" inertia="shell" />
+    <mesh name="neck_chrome_vis" content_type="model/obj" file="neck_chrome.obj" inertia="shell" />
+    <mesh name="neck_copper_vis" content_type="model/obj" file="neck_copper.obj" inertia="shell" />
+    <mesh name="head_A_vis" content_type="model/obj" file="head_A.obj" inertia="shell" />
+    <mesh name="head_B_vis" content_type="model/obj" file="head_B.obj" inertia="shell" />
+    <mesh name="head_C_vis" content_type="model/obj" file="head_C.obj" inertia="shell" />
+    <mesh name="head_D_vis" content_type="model/obj" file="head_D.obj" inertia="shell" />
+    <mesh name="head_E_vis" content_type="model/obj" file="head_E.obj" inertia="shell" />
+    <mesh name="head_F_vis" content_type="model/obj" file="head_F.obj" inertia="shell" />
+    <mesh name="head_chrome_vis" content_type="model/obj" file="head_chrome.obj" inertia="shell" />
+    <mesh name="head_copper_vis" content_type="model/obj" file="head_copper.obj" inertia="shell" />
+    <mesh name="upper_arm_L_A_vis" content_type="model/obj" file="upper_arm_L_A.obj" inertia="shell" />
+    <mesh name="upper_arm_L_B_vis" content_type="model/obj" file="upper_arm_L_B.obj" inertia="shell" />
+    <mesh name="upper_arm_L_C_vis" content_type="model/obj" file="upper_arm_L_C.obj" inertia="shell" />
+    <mesh name="upper_arm_L_E_vis" content_type="model/obj" file="upper_arm_L_E.obj" inertia="shell" />
+    <mesh name="upper_arm_L_F_vis" content_type="model/obj" file="upper_arm_L_F.obj" inertia="shell" />
+    <mesh name="upper_arm_L_copper_vis" content_type="model/obj" file="upper_arm_L_copper.obj" inertia="shell" />
+    <mesh name="forearm_L_A_vis" content_type="model/obj" file="forearm_L_A.obj" inertia="shell" />
+    <mesh name="forearm_L_B_vis" content_type="model/obj" file="forearm_L_B.obj" inertia="shell" />
+    <mesh name="forearm_L_C_vis" content_type="model/obj" file="forearm_L_C.obj" inertia="shell" />
+    <mesh name="forearm_L_E_vis" content_type="model/obj" file="forearm_L_E.obj" inertia="shell" />
+    <mesh name="forearm_L_chrome_vis" content_type="model/obj" file="forearm_L_chrome.obj" inertia="shell" />
+    <mesh name="hand_L_A_vis" content_type="model/obj" file="hand_L_A.obj" inertia="shell" />
+    <mesh name="hand_L_B_vis" content_type="model/obj" file="hand_L_B.obj" inertia="shell" />
+    <mesh name="hand_L_C_vis" content_type="model/obj" file="hand_L_C.obj" inertia="shell" />
+    <mesh name="thigh_L_A_vis" content_type="model/obj" file="thigh_L_A.obj" inertia="shell" />
+    <mesh name="thigh_L_B_vis" content_type="model/obj" file="thigh_L_B.obj" inertia="shell" />
+    <mesh name="thigh_L_C_vis" content_type="model/obj" file="thigh_L_C.obj" inertia="shell" />
+    <mesh name="thigh_L_E_vis" content_type="model/obj" file="thigh_L_E.obj" inertia="shell" />
+    <mesh name="thigh_L_F_vis" content_type="model/obj" file="thigh_L_F.obj" inertia="shell" />
+    <mesh name="thigh_L_chrome_vis" content_type="model/obj" file="thigh_L_chrome.obj" inertia="shell" />
+    <mesh name="thigh_L_copper_vis" content_type="model/obj" file="thigh_L_copper.obj" inertia="shell" />
+    <mesh name="shin_L_A_vis" content_type="model/obj" file="shin_L_A.obj" inertia="shell" />
+    <mesh name="shin_L_B_vis" content_type="model/obj" file="shin_L_B.obj" inertia="shell" />
+    <mesh name="shin_L_C_vis" content_type="model/obj" file="shin_L_C.obj" inertia="shell" />
+    <mesh name="shin_L_E_vis" content_type="model/obj" file="shin_L_E.obj" inertia="shell" />
+    <mesh name="shin_L_F_vis" content_type="model/obj" file="shin_L_F.obj" inertia="shell" />
+    <mesh name="shin_L_chrome_vis" content_type="model/obj" file="shin_L_chrome.obj" inertia="shell" />
+    <mesh name="shin_L_copper_vis" content_type="model/obj" file="shin_L_copper.obj" inertia="shell" />
+    <mesh name="foot_L_A_vis" content_type="model/obj" file="foot_L_A.obj" inertia="shell" />
+    <mesh name="foot_L_B_vis" content_type="model/obj" file="foot_L_B.obj" inertia="shell" />
+    <mesh name="foot_L_C_vis" content_type="model/obj" file="foot_L_C.obj" inertia="shell" />
+    <mesh name="foot_L_E_vis" content_type="model/obj" file="foot_L_E.obj" inertia="shell" />
+    <mesh name="upper_arm_R_A_vis" content_type="model/obj" file="upper_arm_R_A.obj" inertia="shell" />
+    <mesh name="upper_arm_R_B_vis" content_type="model/obj" file="upper_arm_R_B.obj" inertia="shell" />
+    <mesh name="upper_arm_R_C_vis" content_type="model/obj" file="upper_arm_R_C.obj" inertia="shell" />
+    <mesh name="upper_arm_R_E_vis" content_type="model/obj" file="upper_arm_R_E.obj" inertia="shell" />
+    <mesh name="upper_arm_R_F_vis" content_type="model/obj" file="upper_arm_R_F.obj" inertia="shell" />
+    <mesh name="upper_arm_R_copper_vis" content_type="model/obj" file="upper_arm_R_copper.obj" inertia="shell" />
+    <mesh name="forearm_R_A_vis" content_type="model/obj" file="forearm_R_A.obj" inertia="shell" />
+    <mesh name="forearm_R_B_vis" content_type="model/obj" file="forearm_R_B.obj" inertia="shell" />
+    <mesh name="forearm_R_C_vis" content_type="model/obj" file="forearm_R_C.obj" inertia="shell" />
+    <mesh name="forearm_R_E_vis" content_type="model/obj" file="forearm_R_E.obj" inertia="shell" />
+    <mesh name="forearm_R_chrome_vis" content_type="model/obj" file="forearm_R_chrome.obj" inertia="shell" />
+    <mesh name="hand_R_A_vis" content_type="model/obj" file="hand_R_A.obj" inertia="shell" />
+    <mesh name="hand_R_B_vis" content_type="model/obj" file="hand_R_B.obj" inertia="shell" />
+    <mesh name="hand_R_C_vis" content_type="model/obj" file="hand_R_C.obj" inertia="shell" />
+    <mesh name="thigh_R_A_vis" content_type="model/obj" file="thigh_R_A.obj" inertia="shell" />
+    <mesh name="thigh_R_B_vis" content_type="model/obj" file="thigh_R_B.obj" inertia="shell" />
+    <mesh name="thigh_R_C_vis" content_type="model/obj" file="thigh_R_C.obj" inertia="shell" />
+    <mesh name="thigh_R_E_vis" content_type="model/obj" file="thigh_R_E.obj" inertia="shell" />
+    <mesh name="thigh_R_F_vis" content_type="model/obj" file="thigh_R_F.obj" inertia="shell" />
+    <mesh name="thigh_R_chrome_vis" content_type="model/obj" file="thigh_R_chrome.obj" inertia="shell" />
+    <mesh name="thigh_R_copper_vis" content_type="model/obj" file="thigh_R_copper.obj" inertia="shell" />
+    <mesh name="shin_R_A_vis" content_type="model/obj" file="shin_R_A.obj" inertia="shell" />
+    <mesh name="shin_R_B_vis" content_type="model/obj" file="shin_R_B.obj" inertia="shell" />
+    <mesh name="shin_R_C_vis" content_type="model/obj" file="shin_R_C.obj" inertia="shell" />
+    <mesh name="shin_R_E_vis" content_type="model/obj" file="shin_R_E.obj" inertia="shell" />
+    <mesh name="shin_R_F_vis" content_type="model/obj" file="shin_R_F.obj" inertia="shell" />
+    <mesh name="shin_R_chrome_vis" content_type="model/obj" file="shin_R_chrome.obj" inertia="shell" />
+    <mesh name="shin_R_copper_vis" content_type="model/obj" file="shin_R_copper.obj" inertia="shell" />
+    <mesh name="foot_R_A_vis" content_type="model/obj" file="foot_R_A.obj" inertia="shell" />
+    <mesh name="foot_R_B_vis" content_type="model/obj" file="foot_R_B.obj" inertia="shell" />
+    <mesh name="foot_R_C_vis" content_type="model/obj" file="foot_R_C.obj" inertia="shell" />
+    <mesh name="foot_R_E_vis" content_type="model/obj" file="foot_R_E.obj" inertia="shell" />
+  </asset>
+  <worldbody>
+    <geom name="floor" size="0 0 0.05" type="plane" condim="4" friction="1 0.02 0.005" material="floor_mat" />
+    <camera name="front_view" quat="0.5 0.5 0.5 0.5" pos="2.8 0 0.95" />
+    <camera name="side_view" quat="0.707107 0.707107 0 0" pos="0 -2.8 0.95" />
+    <camera name="back_view" quat="-0.5 -0.5 0.5 0.5" pos="-2.8 0 0.95" />
+    <camera name="three_quarter" quat="0.693862 0.577206 0.275358 0.331009" pos="2.2 -1.8 1.45" />
+    <light name="key_light" pos="2.5 -2 3.8" dir="-0.450586 0.350456 -0.821068" diffuse="0.95 0.96 1" />
+    <light name="fill_light" castshadow="false" pos="-2.2 2.2 2.6" dir="0.502519 -0.502519 -0.703526" diffuse="0.35 0.45 0.65" />
+    <frame pos="0 0 1.05">
+      <body name="humanoid_robot" childclass="humanoid_robot">
+        <joint name="floating_base" class="main" type="free" />
+        <geom name="humanoid_robot_A_visual" class="visual" pos="1.45283e-17 1.69407e-20 -3.67761e-16" quat="1 0 0 0" material="mat_A" mesh="humanoid_robot_A_vis" />
+        <geom name="humanoid_robot_B_visual" class="visual" quat="1 0 0 0" material="mat_B" mesh="humanoid_robot_B_vis" />
+        <geom name="humanoid_robot_C_visual" class="visual" quat="1 0 0 0" material="mat_C" mesh="humanoid_robot_C_vis" />
+        <geom name="humanoid_robot_F_visual" class="visual" quat="1 0 0 0" material="mat_F" mesh="humanoid_robot_F_vis" />
+        <geom name="humanoid_robot_copper_visual" class="visual" pos="-1.49186e-16 0 -3.1225e-16" quat="1 0 0 0" material="mat_copper" mesh="humanoid_robot_copper_vis" />
+        <geom name="pelvis_core_col" class="collision" size="0.075 0.115 0.072" pos="0.005 0 0.015" type="box" mass="6.371" />
+        <geom name="pelvis_waist_bridge_col" class="collision" size="0.05 0.0315159" pos="-0.009 0 0.0935" quat="0.015867 0 0.999874 0" type="capsule" mass="1.30632" />
+        <geom name="pelvis_hip_drum_L_col" class="collision" size="0.058 0.041" pos="0 0.125 -0.01" quat="0.707107 0.707107 0 0" type="cylinder" mass="1.11134" />
+        <geom name="pelvis_hip_drum_R_col" class="collision" size="0.058 0.041" pos="0 -0.125 -0.01" quat="0.707107 -0.707107 0 0" type="cylinder" mass="1.11134" />
+        <site name="imu_site" size="0.02 0.02 0.015" pos="0.028 0 0.058" type="box" group="4" rgba="0.95 0.25 0.25 0.4" />
+        <camera name="follow_three_quarter" quat="0.693862 0.577206 0.275358 0.331009" pos="2.2 -1.8 0.4" mode="trackcom" />
+        <camera name="follow_side" quat="0.707107 0.707107 0 0" pos="0 -2.8 -0.1" mode="trackcom" />
+        <camera name="follow_front" quat="0.5 0.5 0.5 0.5" pos="2.8 0 -0.1" mode="trackcom" />
+        <camera name="follow_back" quat="-0.5 -0.5 0.5 0.5" pos="-2.8 0 -0.1" mode="trackcom" />
+        <body name="lumbar_waist" pos="-0.01 0 0.13">
+          <joint name="spine_lower_flex" range="-0.261799 0.436332" armature="0.03" damping="2" axis="0 1 0" />
+          <joint name="spine_lower_abd" range="-0.261799 0.261799" armature="0.03" damping="2" axis="1 0 0" />
+          <joint name="spine_lower_twist" range="-0.436332 0.436332" damping="1.5" />
+          <geom name="lumbar_waist_C_visual" class="visual" material="mat_C" mesh="lumbar_waist_C_vis" />
+          <geom name="lumbar_waist_E_visual" class="visual" pos="-4.51028e-17 -1.68021e-25 -4.996e-16" quat="1 0 0 0" material="mat_E" mesh="lumbar_waist_E_vis" />
+          <geom name="lumbar_waist_F_visual" class="visual" quat="1 0 0 0" material="mat_F" mesh="lumbar_waist_F_vis" />
+          <geom name="lumbar_waist_chrome_visual" class="visual" pos="1.94289e-16 -7.10858e-26 -4.30211e-16" quat="1 0 0 0" material="mat_chrome" mesh="lumbar_waist_chrome_vis" />
+          <geom name="lumbar_waist_col" class="collision" size="0.082 0.072" pos="0.006 0 0.094" quat="0 1 0 0" type="cylinder" mass="3.7" />
+          <body name="torso" pos="0 0 0.19">
+            <joint name="spine_upper_flex" range="-0.174533 0.261799" armature="0.03" damping="2" axis="0 1 0" />
+            <joint name="spine_upper_twist" range="-0.349066 0.349066" damping="1.5" />
+            <geom name="torso_A_visual" class="visual" pos="-2.11636e-16 -1.0571e-18 -8.18789e-16" quat="1 0 0 0" material="mat_A" mesh="torso_A_vis" />
+            <geom name="torso_B_visual" class="visual" pos="-8.32667e-17 -2.92735e-18 -3.46945e-16" quat="1 0 0 0" material="mat_B" mesh="torso_B_vis" />
+            <geom name="torso_C_visual" class="visual" pos="5.89806e-17 8.27181e-25 -4.44089e-16" quat="1 0 0 0" material="mat_C" mesh="torso_C_vis" />
+            <geom name="torso_E_visual" class="visual" pos="-5.55112e-17 1.06913e-18 -6.10623e-16" quat="1 0 0 0" material="mat_E" mesh="torso_E_vis" />
+            <geom name="torso_F_visual" class="visual" pos="5.0307e-17 9.49157e-27 -4.44089e-16" quat="1 0 0 0" material="mat_F" mesh="torso_F_vis" />
+            <geom name="torso_chrome_visual" class="visual" pos="1.52656e-16 0 -2.77556e-16" quat="1 0 0 0" material="mat_chrome" mesh="torso_chrome_vis" />
+            <geom name="torso_copper_visual" class="visual" pos="-6.245e-17 -1.9387e-26 -2.498e-16" quat="1 0 0 0" material="mat_copper" mesh="torso_copper_vis" />
+            <geom name="torso_chest_col" class="collision" size="0.118 0.16 0.085" pos="0.012 0 0.095" type="box" mass="19.2914" />
+            <geom name="torso_shoulder_beam_col" class="collision" size="0.046 0.185" pos="0 0 0.115" quat="0.707107 0.707107 0 0" type="capsule" mass="4.30856" />
+            <body name="neck" pos="0.005 0 0.175">
+              <joint name="neck_flex" range="-0.349066 0.349066" armature="0.01" damping="0.5" frictionloss="0.05" axis="0 1 0" />
+              <joint name="neck_twist" range="-1.0472 1.0472" armature="0.01" damping="0.5" frictionloss="0.05" />
+              <geom name="neck_C_visual" class="visual" quat="1 0 0 0" material="mat_C" mesh="neck_C_vis" />
+              <geom name="neck_F_visual" class="visual" quat="1 0 0 0" material="mat_F" mesh="neck_F_vis" />
+              <geom name="neck_chrome_visual" class="visual" quat="1 0 0 0" material="mat_chrome" mesh="neck_chrome_vis" />
+              <geom name="neck_copper_visual" class="visual" quat="1 0 0 0" material="mat_copper" mesh="neck_copper_vis" />
+              <geom name="neck_col" class="collision" size="0.036 0.0290689" pos="0.002 0 0.039" quat="0.0344214 0 -0.999407 0" type="capsule" mass="1.2" />
+              <body name="head" pos="0.005 0 0.075">
+                <joint name="head_flex" range="-0.261799 0.349066" armature="0.01" damping="0.4" frictionloss="0.05" axis="0 1 0" />
+                <joint name="head_abd" range="-0.349066 0.349066" armature="0.01" damping="0.4" frictionloss="0.05" axis="1 0 0" />
+                <geom name="head_A_visual" class="visual" pos="1.35308e-16 -5.69206e-19 -7.63278e-16" quat="1 0 0 0" material="mat_A" mesh="head_A_vis" />
+                <geom name="head_B_visual" class="visual" pos="3.29597e-17 3.38813e-21 -4.16334e-16" quat="1 0 0 0" material="mat_B" mesh="head_B_vis" />
+                <geom name="head_C_visual" class="visual" pos="1.73472e-16 0 -4.02456e-16" quat="1 0 0 0" material="mat_C" mesh="head_C_vis" />
+                <geom name="head_D_visual" class="visual" material="mat_D" mesh="head_D_vis" />
+                <geom name="head_E_visual" class="visual" pos="-2.42861e-16 -4.52364e-25 -4.16334e-16" quat="1 0 0 0" material="mat_E" mesh="head_E_vis" />
+                <geom name="head_F_visual" class="visual" pos="6.41848e-17 0 -6.93889e-16" quat="1 0 0 0" material="mat_F" mesh="head_F_vis" />
+                <geom name="head_chrome_visual" class="visual" pos="-1.73472e-16 0 -4.57967e-16" quat="1 0 0 0" material="mat_chrome" mesh="head_chrome_vis" />
+                <geom name="head_copper_visual" class="visual" pos="4.33681e-17 0 -4.57967e-16" quat="1 0 0 0" material="mat_copper" mesh="head_copper_vis" />
+                <geom name="head_cranium_col" class="collision" size="0.08 0.0152069" pos="-0.0025 0 0.08" quat="0.0824805 0 -0.996593 0" type="capsule" mass="3" />
+              </body>
+            </body>
+            <body name="upper_arm_L" pos="0 0.205 0.11">
+              <joint name="shoulder_L_flex" range="-0.872665 2.79253" frictionloss="0.08" axis="0 -1 0" />
+              <joint name="shoulder_L_abd" range="-0.139626 2.0944" frictionloss="0.08" axis="1 0 0" />
+              <joint name="shoulder_L_twist" range="-1.0472 1.0472" armature="0.015" damping="0.8" frictionloss="0.06" />
+              <geom name="upper_arm_L_A_visual" class="visual" quat="1 0 0 0" material="mat_A" mesh="upper_arm_L_A_vis" />
+              <geom name="upper_arm_L_B_visual" class="visual" material="mat_B" mesh="upper_arm_L_B_vis" />
+              <geom name="upper_arm_L_C_visual" class="visual" material="mat_C" mesh="upper_arm_L_C_vis" />
+              <geom name="upper_arm_L_E_visual" class="visual" pos="-2.35922e-16 -3.60822e-16 4.16334e-16" quat="1 0 0 0" material="mat_E" mesh="upper_arm_L_E_vis" />
+              <geom name="upper_arm_L_F_visual" class="visual" material="mat_F" mesh="upper_arm_L_F_vis" />
+              <geom name="upper_arm_L_copper_visual" class="visual" pos="8.67362e-17 -5.55112e-17 4.30211e-16" quat="1 0 0 0" material="mat_copper" mesh="upper_arm_L_copper_vis" />
+              <geom name="shoulder_hub_L" class="collision" size="0.048" mass="0.881386" />
+              <geom name="upper_arm_L" class="collision" size="0.046 0.0926188" pos="-0.004 0.0265 -0.115" quat="0.992906 0.116896 0.0217482 0" type="capsule" mass="3.11861" />
+              <body name="forearm_L" pos="-0.01 0.055 -0.23">
+                <joint name="elbow_L_flex" range="0 2.35619" armature="0.015" damping="0.8" frictionloss="0.05" axis="0 -1 0" />
+                <geom name="forearm_L_A_visual" class="visual" pos="-5.89806e-17 -1.42247e-16 7.77156e-16" quat="1 0 0 0" material="mat_A" mesh="forearm_L_A_vis" />
+                <geom name="forearm_L_B_visual" class="visual" pos="-1.73472e-17 -3.81639e-17 2.498e-16" quat="1 0 0 0" material="mat_B" mesh="forearm_L_B_vis" />
+                <geom name="forearm_L_C_visual" class="visual" quat="1 0 0 0" material="mat_C" mesh="forearm_L_C_vis" />
+                <geom name="forearm_L_E_visual" class="visual" pos="-8.67362e-17 -1.80411e-16 4.71845e-16" quat="1 0 0 0" material="mat_E" mesh="forearm_L_E_vis" />
+                <geom name="forearm_L_chrome_visual" class="visual" pos="-1.35308e-16 -2.81025e-16 2.498e-15" quat="1 0 0 0" material="mat_chrome" mesh="forearm_L_chrome_vis" />
+                <geom name="elbow_drum_L" class="collision" size="0.038 0.034" quat="0.707107 0.707107 0 0" type="cylinder" mass="0.37368" />
+                <geom name="forearm_L" class="collision" size="0.04 0.115091" pos="0.009 0.013 -0.136" quat="0.997627 0.0566113 -0.0391924 0" type="capsule" mass="1.72632" />
+                <body name="hand_L" pos="0.02 0.03 -0.28">
+                  <joint name="wrist_L_flex" range="-0.785398 0.785398" armature="0.008" damping="0.3" frictionloss="0.03" axis="0 -1 0" />
+                  <joint name="wrist_L_abd" range="-0.436332 0.436332" armature="0.008" damping="0.3" frictionloss="0.03" axis="1 0 0" />
+                  <geom name="hand_L_A_visual" class="visual" pos="-1.99493e-17 -4.68375e-17 2.498e-16" quat="1 0 0 0" material="mat_A" mesh="hand_L_A_vis" />
+                  <geom name="hand_L_B_visual" class="visual" pos="-3.20924e-17 -3.20924e-17 7.21645e-16" quat="1 0 0 0" material="mat_B" mesh="hand_L_B_vis" />
+                  <geom name="hand_L_C_visual" class="visual" pos="-1.73472e-17 -6.07153e-18 2.35922e-16" quat="1 0 0 0" material="mat_C" mesh="hand_L_C_vis" />
+                  <geom name="hand_L" class="collision" size="0.038 0.018 0.082" pos="0.004 0.002 -0.082" type="box" mass="0.9" />
+                </body>
+              </body>
+            </body>
+            <body name="upper_arm_R" pos="0 -0.205 0.11">
+              <joint name="shoulder_R_flex" range="-0.872665 2.79253" frictionloss="0.08" axis="0 -1 0" />
+              <joint name="shoulder_R_abd" range="-0.139626 2.0944" frictionloss="0.08" axis="-1 0 0" />
+              <joint name="shoulder_R_twist" range="-1.0472 1.0472" armature="0.015" damping="0.8" frictionloss="0.06" axis="0 0 -1" />
+              <geom name="upper_arm_R_A_visual" class="visual" quat="1 0 0 0" material="mat_A" mesh="upper_arm_R_A_vis" />
+              <geom name="upper_arm_R_B_visual" class="visual" material="mat_B" mesh="upper_arm_R_B_vis" />
+              <geom name="upper_arm_R_C_visual" class="visual" material="mat_C" mesh="upper_arm_R_C_vis" />
+              <geom name="upper_arm_R_E_visual" class="visual" pos="-2.42861e-16 3.60822e-16 4.16334e-16" quat="1 0 0 0" material="mat_E" mesh="upper_arm_R_E_vis" />
+              <geom name="upper_arm_R_F_visual" class="visual" material="mat_F" mesh="upper_arm_R_F_vis" />
+              <geom name="upper_arm_R_copper_visual" class="visual" pos="9.71445e-17 6.59195e-17 4.85723e-16" quat="1 0 0 0" material="mat_copper" mesh="upper_arm_R_copper_vis" />
+              <geom name="shoulder_hub_R" class="collision" size="0.048" mass="0.881386" />
+              <geom name="upper_arm_R" class="collision" size="0.046 0.0926188" pos="-0.004 -0.0265 -0.115" quat="0.992906 -0.116896 0.0217482 0" type="capsule" mass="3.11861" />
+              <body name="forearm_R" pos="-0.01 -0.055 -0.23">
+                <joint name="elbow_R_flex" range="0 2.35619" armature="0.015" damping="0.8" frictionloss="0.05" axis="0 -1 0" />
+                <geom name="forearm_R_A_visual" class="visual" pos="-5.72459e-17 1.42247e-16 7.77156e-16" quat="1 0 0 0" material="mat_A" mesh="forearm_R_A_vis" />
+                <geom name="forearm_R_B_visual" class="visual" pos="-1.73472e-17 3.81639e-17 2.498e-16" quat="1 0 0 0" material="mat_B" mesh="forearm_R_B_vis" />
+                <geom name="forearm_R_C_visual" class="visual" quat="1 0 0 0" material="mat_C" mesh="forearm_R_C_vis" />
+                <geom name="forearm_R_E_visual" class="visual" pos="-8.67362e-17 1.80411e-16 4.71845e-16" quat="1 0 0 0" material="mat_E" mesh="forearm_R_E_vis" />
+                <geom name="forearm_R_chrome_visual" class="visual" pos="-1.9082e-16 2.67147e-16 2.38698e-15" quat="1 0 0 0" material="mat_chrome" mesh="forearm_R_chrome_vis" />
+                <geom name="elbow_drum_R" class="collision" size="0.038 0.034" quat="0.707107 -0.707107 0 0" type="cylinder" mass="0.37368" />
+                <geom name="forearm_R" class="collision" size="0.04 0.115091" pos="0.009 -0.013 -0.136" quat="0.997627 -0.0566113 -0.0391924 0" type="capsule" mass="1.72632" />
+                <body name="hand_R" pos="0.02 -0.03 -0.28">
+                  <joint name="wrist_R_flex" range="-0.785398 0.785398" armature="0.008" damping="0.3" frictionloss="0.03" axis="0 -1 0" />
+                  <joint name="wrist_R_abd" range="-0.436332 0.436332" armature="0.008" damping="0.3" frictionloss="0.03" axis="-1 0 0" />
+                  <geom name="hand_R_A_visual" class="visual" pos="-1.9082e-17 4.68375e-17 2.498e-16" quat="1 0 0 0" material="mat_A" mesh="hand_R_A_vis" />
+                  <geom name="hand_R_B_visual" class="visual" pos="-3.20924e-17 3.20924e-17 7.21645e-16" quat="1 0 0 0" material="mat_B" mesh="hand_R_B_vis" />
+                  <geom name="hand_R_C_visual" class="visual" pos="-1.73472e-17 6.07153e-18 2.35922e-16" quat="1 0 0 0" material="mat_C" mesh="hand_R_C_vis" />
+                  <geom name="hand_R" class="collision" size="0.038 0.018 0.082" pos="0.004 -0.002 -0.082" type="box" mass="0.9" />
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="thigh_L" pos="0 0.11 -0.01">
+          <joint name="hip_L_flex" range="-0.610865 2.00713" armature="0.04" damping="2.5" axis="0 -1 0" />
+          <joint name="hip_L_abd" range="-0.174533 0.785398" armature="0.04" damping="2.5" axis="1 0 0" />
+          <joint name="hip_L_twist" range="-0.523599 0.523599" armature="0.025" damping="1.8" />
+          <geom name="thigh_L_A_visual" class="visual" quat="1 0 0 0" material="mat_A" mesh="thigh_L_A_vis" />
+          <geom name="thigh_L_B_visual" class="visual" material="mat_B" mesh="thigh_L_B_vis" />
+          <geom name="thigh_L_C_visual" class="visual" pos="6.41848e-17 -1.38778e-16 8.88178e-16" quat="1 0 0 0" material="mat_C" mesh="thigh_L_C_vis" />
+          <geom name="thigh_L_E_visual" class="visual" pos="-3.29597e-17 -3.33067e-16 8.04912e-16" quat="1 0 0 0" material="mat_E" mesh="thigh_L_E_vis" />
+          <geom name="thigh_L_F_visual" class="visual" quat="1 0 0 0" material="mat_F" mesh="thigh_L_F_vis" />
+          <geom name="thigh_L_chrome_visual" class="visual" material="mat_chrome" mesh="thigh_L_chrome_vis" />
+          <geom name="thigh_L_copper_visual" class="visual" material="mat_copper" mesh="thigh_L_copper_vis" />
+          <geom name="thigh_L" class="collision" size="0.082 0.135548" pos="0.006 0.0235 -0.185" quat="0.998989 0.0424633 -0.0147699 0" type="capsule" mass="5.2" />
+          <body name="shin_L" pos="0.01 0.04 -0.38">
+            <joint name="knee_L_flex" range="0 2.35619" armature="0.04" damping="2.5" axis="0 1 0" />
+            <geom name="shin_L_A_visual" class="visual" pos="-3.52366e-19 -6.245e-17 6.66134e-16" quat="1 0 0 0" material="mat_A" mesh="shin_L_A_vis" />
+            <geom name="shin_L_B_visual" class="visual" quat="1 0 0 0" material="mat_B" mesh="shin_L_B_vis" />
+            <geom name="shin_L_C_visual" class="visual" pos="8.32667e-17 -7.28584e-17 7.21645e-16" quat="1 0 0 0" material="mat_C" mesh="shin_L_C_vis" />
+            <geom name="shin_L_E_visual" class="visual" pos="9.02056e-17 -2.01228e-16 9.4369e-16" quat="1 0 0 0" material="mat_E" mesh="shin_L_E_vis" />
+            <geom name="shin_L_F_visual" class="visual" quat="1 0 0 0" material="mat_F" mesh="shin_L_F_vis" />
+            <geom name="shin_L_chrome_visual" class="visual" pos="1.11022e-16 -1.31839e-16 9.99201e-16" quat="1 0 0 0" material="mat_chrome" mesh="shin_L_chrome_vis" />
+            <geom name="shin_L_copper_visual" class="visual" pos="1.31839e-16 -3.46945e-17 1.16573e-15" quat="1 0 0 0" material="mat_copper" mesh="shin_L_copper_vis" />
+            <geom name="knee_drum_L" class="collision" size="0.056 0.057" quat="0.707107 0.707107 0 0" type="cylinder" mass="0.856301" />
+            <geom name="shin_L" class="collision" size="0.062 0.199982" pos="-0.014 0.022 -0.259" quat="0.998771 0.0350461 0.0350461 0" type="capsule" mass="4.4437" />
+            <body name="foot_L" pos="-0.03 0.04 -0.52">
+              <joint name="ankle_L_flex" range="-0.610865 0.610865" armature="0.03" damping="2" frictionloss="0.08" axis="0 -1 0" />
+              <joint name="ankle_L_abd" range="-0.261799 0.261799" damping="1.2" frictionloss="0.06" axis="1 0 0" />
+              <geom name="foot_L_A_visual" class="visual" pos="-4.51028e-16 -1.01644e-19 7.21645e-16" quat="1 0 0 0" material="mat_A" mesh="foot_L_A_vis" />
+              <geom name="foot_L_B_visual" class="visual" pos="-2.11636e-16 -2.71419e-25 8.60423e-16" quat="1 0 0 0" material="mat_B" mesh="foot_L_B_vis" />
+              <geom name="foot_L_C_visual" class="visual" pos="-1.80411e-16 -2.1684e-18 4.44089e-16" quat="1 0 0 0" material="mat_C" mesh="foot_L_C_vis" />
+              <geom name="foot_L_E_visual" class="visual" quat="1 0 0 0" material="mat_E" mesh="foot_L_E_vis" />
+              <geom name="foot_sole_L" class="collision" size="0.1575 0.061 0.018" pos="0.0635 0 -0.122" type="box" friction="1" rgba="0.9 0.8 0.15 0.55" mass="1.20895" />
+              <geom name="foot_instep_L" class="collision" size="0.095 0.054 0.036" pos="0.026 0 -0.08" type="box" mass="1.29105" />
+              <site name="foot_L_sole_site" size="0.165 0.068 0.012" pos="0.0635 0 -0.136" type="box" group="4" rgba="0.15 0.8 0.85 0.35" />
+            </body>
+          </body>
+        </body>
+        <body name="thigh_R" pos="0 -0.11 -0.01">
+          <joint name="hip_R_flex" range="-0.610865 2.00713" armature="0.04" damping="2.5" axis="0 -1 0" />
+          <joint name="hip_R_abd" range="-0.174533 0.785398" armature="0.04" damping="2.5" axis="-1 0 0" />
+          <joint name="hip_R_twist" range="-0.523599 0.523599" armature="0.025" damping="1.8" axis="0 0 -1" />
+          <geom name="thigh_R_A_visual" class="visual" quat="1 0 0 0" material="mat_A" mesh="thigh_R_A_vis" />
+          <geom name="thigh_R_B_visual" class="visual" material="mat_B" mesh="thigh_R_B_vis" />
+          <geom name="thigh_R_C_visual" class="visual" pos="5.89806e-17 1.249e-16 8.04912e-16" quat="1 0 0 0" material="mat_C" mesh="thigh_R_C_vis" />
+          <geom name="thigh_R_E_visual" class="visual" pos="-3.55618e-17 3.60822e-16 8.88178e-16" quat="1 0 0 0" material="mat_E" mesh="thigh_R_E_vis" />
+          <geom name="thigh_R_F_visual" class="visual" quat="1 0 0 0" material="mat_F" mesh="thigh_R_F_vis" />
+          <geom name="thigh_R_chrome_visual" class="visual" material="mat_chrome" mesh="thigh_R_chrome_vis" />
+          <geom name="thigh_R_copper_visual" class="visual" material="mat_copper" mesh="thigh_R_copper_vis" />
+          <geom name="thigh_R" class="collision" size="0.082 0.135548" pos="0.006 -0.0235 -0.185" quat="0.998989 -0.0424633 -0.0147699 0" type="capsule" mass="5.2" />
+          <body name="shin_R" pos="0.01 -0.04 -0.38">
+            <joint name="knee_R_flex" range="0 2.35619" armature="0.04" damping="2.5" axis="0 1 0" />
+            <geom name="shin_R_A_visual" class="visual" pos="5.14996e-19 6.245e-17 6.66134e-16" quat="1 0 0 0" material="mat_A" mesh="shin_R_A_vis" />
+            <geom name="shin_R_B_visual" class="visual" quat="1 0 0 0" material="mat_B" mesh="shin_R_B_vis" />
+            <geom name="shin_R_C_visual" class="visual" pos="8.32667e-17 7.28584e-17 7.21645e-16" quat="1 0 0 0" material="mat_C" mesh="shin_R_C_vis" />
+            <geom name="shin_R_E_visual" class="visual" pos="9.02056e-17 2.01228e-16 9.4369e-16" quat="1 0 0 0" material="mat_E" mesh="shin_R_E_vis" />
+            <geom name="shin_R_F_visual" class="visual" quat="1 0 0 0" material="mat_F" mesh="shin_R_F_vis" />
+            <geom name="shin_R_chrome_visual" class="visual" pos="9.02056e-17 1.11022e-16 8.32667e-16" quat="1 0 0 0" material="mat_chrome" mesh="shin_R_chrome_vis" />
+            <geom name="shin_R_copper_visual" class="visual" pos="1.11022e-16 2.94903e-17 9.99201e-16" quat="1 0 0 0" material="mat_copper" mesh="shin_R_copper_vis" />
+            <geom name="knee_drum_R" class="collision" size="0.056 0.057" quat="0.707107 -0.707107 0 0" type="cylinder" mass="0.856301" />
+            <geom name="shin_R" class="collision" size="0.062 0.199982" pos="-0.014 -0.022 -0.259" quat="0.998771 -0.0350461 0.0350461 0" type="capsule" mass="4.4437" />
+            <body name="foot_R" pos="-0.03 -0.04 -0.52">
+              <joint name="ankle_R_flex" range="-0.610865 0.610865" armature="0.03" damping="2" frictionloss="0.08" axis="0 -1 0" />
+              <joint name="ankle_R_abd" range="-0.261799 0.261799" damping="1.2" frictionloss="0.06" axis="-1 0 0" />
+              <geom name="foot_R_A_visual" class="visual" pos="-4.51028e-16 1.01644e-19 7.21645e-16" quat="1 0 0 0" material="mat_A" mesh="foot_R_A_vis" />
+              <geom name="foot_R_B_visual" class="visual" pos="-2.11636e-16 2.71419e-25 8.60423e-16" quat="1 0 0 0" material="mat_B" mesh="foot_R_B_vis" />
+              <geom name="foot_R_C_visual" class="visual" pos="-1.80411e-16 5.85469e-18 4.44089e-16" quat="1 0 0 0" material="mat_C" mesh="foot_R_C_vis" />
+              <geom name="foot_R_E_visual" class="visual" quat="1 0 0 0" material="mat_E" mesh="foot_R_E_vis" />
+              <geom name="foot_sole_R" class="collision" size="0.1575 0.061 0.018" pos="0.0635 0 -0.122" type="box" friction="1" rgba="0.9 0.8 0.15 0.55" mass="1.20895" />
+              <geom name="foot_instep_R" class="collision" size="0.095 0.054 0.036" pos="0.026 0 -0.08" type="box" mass="1.29105" />
+              <site name="foot_R_sole_site" size="0.165 0.068 0.012" pos="0.0635 0 -0.136" type="box" group="4" rgba="0.15 0.8 0.85 0.35" />
+            </body>
+          </body>
+        </body>
+      </body>
+    </frame>
+  </worldbody>
+  <contact>
+    <exclude name="humanoid_robot_lumbar_waist_exclude" body1="humanoid_robot" body2="lumbar_waist" />
+    <exclude name="lumbar_waist_torso_exclude" body1="lumbar_waist" body2="torso" />
+    <exclude name="torso_neck_exclude" body1="torso" body2="neck" />
+    <exclude name="neck_head_exclude" body1="neck" body2="head" />
+    <exclude name="torso_upper_arm_L_exclude" body1="torso" body2="upper_arm_L" />
+    <exclude name="upper_arm_L_forearm_L_exclude" body1="upper_arm_L" body2="forearm_L" />
+    <exclude name="forearm_L_hand_L_exclude" body1="forearm_L" body2="hand_L" />
+    <exclude name="torso_upper_arm_R_exclude" body1="torso" body2="upper_arm_R" />
+    <exclude name="upper_arm_R_forearm_R_exclude" body1="upper_arm_R" body2="forearm_R" />
+    <exclude name="forearm_R_hand_R_exclude" body1="forearm_R" body2="hand_R" />
+    <exclude name="humanoid_robot_thigh_L_exclude" body1="humanoid_robot" body2="thigh_L" />
+    <exclude name="thigh_L_shin_L_exclude" body1="thigh_L" body2="shin_L" />
+    <exclude name="shin_L_foot_L_exclude" body1="shin_L" body2="foot_L" />
+    <exclude name="humanoid_robot_thigh_R_exclude" body1="humanoid_robot" body2="thigh_R" />
+    <exclude name="thigh_R_shin_R_exclude" body1="thigh_R" body2="shin_R" />
+    <exclude name="shin_R_foot_R_exclude" body1="shin_R" body2="foot_R" />
+  </contact>
+  <actuator>
+    <general name="spine_lower_flex_servo" joint="spine_lower_flex" ctrlrange="-0.261799 0.436332" ctrllimited="true" forcelimited="true" forcerange="-180 180" input="pos" biastype="affine" gainprm="240" biasprm="0 -240 -18" />
+    <general name="spine_lower_abd_servo" joint="spine_lower_abd" ctrlrange="-0.261799 0.261799" ctrllimited="true" forcelimited="true" forcerange="-160 160" input="pos" biastype="affine" gainprm="220" biasprm="0 -220 -16" />
+    <general name="spine_lower_twist_servo" joint="spine_lower_twist" ctrlrange="-0.436332 0.436332" ctrllimited="true" forcelimited="true" forcerange="-140 140" input="pos" biastype="affine" gainprm="180" biasprm="0 -180 -14" />
+    <general name="spine_upper_flex_servo" joint="spine_upper_flex" ctrlrange="-0.174533 0.261799" ctrllimited="true" forcelimited="true" forcerange="-160 160" input="pos" biastype="affine" gainprm="220" biasprm="0 -220 -16" />
+    <general name="spine_upper_twist_servo" joint="spine_upper_twist" ctrlrange="-0.349066 0.349066" ctrllimited="true" forcelimited="true" forcerange="-120 120" input="pos" biastype="affine" gainprm="160" biasprm="0 -160 -12" />
+    <general name="neck_flex_servo" joint="neck_flex" ctrlrange="-0.349066 0.349066" ctrllimited="true" forcelimited="true" forcerange="-25 25" input="pos" biastype="affine" gainprm="30" biasprm="0 -30 -3" />
+    <general name="neck_twist_servo" joint="neck_twist" ctrlrange="-1.0472 1.0472" ctrllimited="true" forcelimited="true" forcerange="-20 20" input="pos" biastype="affine" gainprm="25" biasprm="0 -25 -2.5" />
+    <general name="head_flex_servo" joint="head_flex" ctrlrange="-0.261799 0.349066" ctrllimited="true" forcelimited="true" forcerange="-20 20" input="pos" biastype="affine" gainprm="25" biasprm="0 -25 -2.5" />
+    <general name="head_abd_servo" joint="head_abd" ctrlrange="-0.349066 0.349066" ctrllimited="true" forcelimited="true" forcerange="-20 20" input="pos" biastype="affine" gainprm="25" biasprm="0 -25 -2.5" />
+    <general name="shoulder_L_flex_servo" joint="shoulder_L_flex" ctrlrange="-0.872665 2.79253" ctrllimited="true" forcelimited="true" forcerange="-120 120" input="pos" biastype="affine" gainprm="90" biasprm="0 -90 -8" />
+    <general name="shoulder_L_abd_servo" joint="shoulder_L_abd" ctrlrange="-0.139626 2.0944" ctrllimited="true" forcelimited="true" forcerange="-120 120" input="pos" biastype="affine" gainprm="90" biasprm="0 -90 -8" />
+    <general name="shoulder_L_twist_servo" joint="shoulder_L_twist" ctrlrange="-1.0472 1.0472" ctrllimited="true" forcelimited="true" forcerange="-80 80" input="pos" biastype="affine" gainprm="60" biasprm="0 -60 -6" />
+    <general name="elbow_L_flex_servo" joint="elbow_L_flex" ctrlrange="0 2.35619" ctrllimited="true" forcelimited="true" forcerange="-80 80" input="pos" biastype="affine" gainprm="65" biasprm="0 -65 -6" />
+    <general name="wrist_L_flex_servo" joint="wrist_L_flex" ctrlrange="-0.785398 0.785398" ctrllimited="true" forcelimited="true" forcerange="-25 25" input="pos" biastype="affine" gainprm="20" biasprm="0 -20 -2" />
+    <general name="wrist_L_abd_servo" joint="wrist_L_abd" ctrlrange="-0.436332 0.436332" ctrllimited="true" forcelimited="true" forcerange="-25 25" input="pos" biastype="affine" gainprm="20" biasprm="0 -20 -2" />
+    <general name="shoulder_R_flex_servo" joint="shoulder_R_flex" ctrlrange="-0.872665 2.79253" ctrllimited="true" forcelimited="true" forcerange="-120 120" input="pos" biastype="affine" gainprm="90" biasprm="0 -90 -8" />
+    <general name="shoulder_R_abd_servo" joint="shoulder_R_abd" ctrlrange="-0.139626 2.0944" ctrllimited="true" forcelimited="true" forcerange="-120 120" input="pos" biastype="affine" gainprm="90" biasprm="0 -90 -8" />
+    <general name="shoulder_R_twist_servo" joint="shoulder_R_twist" ctrlrange="-1.0472 1.0472" ctrllimited="true" forcelimited="true" forcerange="-80 80" input="pos" biastype="affine" gainprm="60" biasprm="0 -60 -6" />
+    <general name="elbow_R_flex_servo" joint="elbow_R_flex" ctrlrange="0 2.35619" ctrllimited="true" forcelimited="true" forcerange="-80 80" input="pos" biastype="affine" gainprm="65" biasprm="0 -65 -6" />
+    <general name="wrist_R_flex_servo" joint="wrist_R_flex" ctrlrange="-0.785398 0.785398" ctrllimited="true" forcelimited="true" forcerange="-25 25" input="pos" biastype="affine" gainprm="20" biasprm="0 -20 -2" />
+    <general name="wrist_R_abd_servo" joint="wrist_R_abd" ctrlrange="-0.436332 0.436332" ctrllimited="true" forcelimited="true" forcerange="-25 25" input="pos" biastype="affine" gainprm="20" biasprm="0 -20 -2" />
+    <general name="hip_L_flex_servo" joint="hip_L_flex" ctrlrange="-0.610865 2.00713" ctrllimited="true" forcelimited="true" forcerange="-220 220" input="pos" biastype="affine" gainprm="380" biasprm="0 -380 -34" />
+    <general name="hip_L_abd_servo" joint="hip_L_abd" ctrlrange="-0.174533 0.785398" ctrllimited="true" forcelimited="true" forcerange="-220 220" input="pos" biastype="affine" gainprm="320" biasprm="0 -320 -28" />
+    <general name="hip_L_twist_servo" joint="hip_L_twist" ctrlrange="-0.523599 0.523599" ctrllimited="true" forcelimited="true" forcerange="-160 160" input="pos" biastype="affine" gainprm="200" biasprm="0 -200 -18" />
+    <general name="knee_L_flex_servo" joint="knee_L_flex" ctrlrange="0 2.35619" ctrllimited="true" forcelimited="true" forcerange="-280 280" input="pos" biastype="affine" gainprm="420" biasprm="0 -420 -36" />
+    <general name="ankle_L_flex_servo" joint="ankle_L_flex" ctrlrange="-0.610865 0.610865" ctrllimited="true" forcelimited="true" forcerange="-120 120" input="pos" biastype="affine" gainprm="560" biasprm="0 -560 -52" />
+    <general name="ankle_L_abd_servo" joint="ankle_L_abd" ctrlrange="-0.261799 0.261799" ctrllimited="true" forcelimited="true" forcerange="-60 60" input="pos" biastype="affine" gainprm="260" biasprm="0 -260 -24" />
+    <general name="hip_R_flex_servo" joint="hip_R_flex" ctrlrange="-0.610865 2.00713" ctrllimited="true" forcelimited="true" forcerange="-220 220" input="pos" biastype="affine" gainprm="380" biasprm="0 -380 -34" />
+    <general name="hip_R_abd_servo" joint="hip_R_abd" ctrlrange="-0.174533 0.785398" ctrllimited="true" forcelimited="true" forcerange="-220 220" input="pos" biastype="affine" gainprm="320" biasprm="0 -320 -28" />
+    <general name="hip_R_twist_servo" joint="hip_R_twist" ctrlrange="-0.523599 0.523599" ctrllimited="true" forcelimited="true" forcerange="-160 160" input="pos" biastype="affine" gainprm="200" biasprm="0 -200 -18" />
+    <general name="knee_R_flex_servo" joint="knee_R_flex" ctrlrange="0 2.35619" ctrllimited="true" forcelimited="true" forcerange="-280 280" input="pos" biastype="affine" gainprm="420" biasprm="0 -420 -36" />
+    <general name="ankle_R_flex_servo" joint="ankle_R_flex" ctrlrange="-0.610865 0.610865" ctrllimited="true" forcelimited="true" forcerange="-120 120" input="pos" biastype="affine" gainprm="560" biasprm="0 -560 -52" />
+    <general name="ankle_R_abd_servo" joint="ankle_R_abd" ctrlrange="-0.261799 0.261799" ctrllimited="true" forcelimited="true" forcerange="-60 60" input="pos" biastype="affine" gainprm="260" biasprm="0 -260 -24" />
+  </actuator>
+  <sensor>
+    <framequat objtype="site" objname="imu_site" name="pelvis_quat" />
+    <gyro site="imu_site" name="pelvis_gyro" />
+    <accelerometer site="imu_site" name="pelvis_acc" />
+    <subtreecom body="humanoid_robot" name="robot_com" />
+    <touch site="foot_L_sole_site" name="foot_L_touch" />
+    <touch site="foot_R_sole_site" name="foot_R_touch" />
+  </sensor>
+</mujoco>

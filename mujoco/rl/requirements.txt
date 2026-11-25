@@ -1,0 +1,14 @@
+# GPU RL stack for Humanoid Robot Prototype (tested on Windows + RTX 4070 Laptop GPU, CUDA 12.6, Python 3.12)
+# Install PyTorch CUDA wheel first, e.g.:
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu126
+
+mujoco>=4.0.1
+mujoco-warp>=4.0.1
+warp-lang>=1.19.0
+rsl-rl-lib>=6.0.0
+tensordict>=0.15.0
+numpy>=2.0.0
+onnx>=1.18.0
+onnxscript>=0.7.0
+tensorboard>=2.18.0
+glfw>=2.7.0
