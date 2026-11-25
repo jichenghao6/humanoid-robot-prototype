@@ -19,6 +19,9 @@ try:
     from .model_config import (
         ACTION_JOINT_NAMES,
         DEFAULT_ANGLES_RAD,
+        GAIT_FREQ_BASE,
+        GAIT_FREQ_MAX_VX,
+        GAIT_FREQ_SLOPE,
         NATURAL_STAND_RAD,
         RL_PD_GAINS,
         ROOT_DIR,
@@ -29,6 +32,9 @@ except ImportError:
     from model_config import (
         ACTION_JOINT_NAMES,
         DEFAULT_ANGLES_RAD,
+        GAIT_FREQ_BASE,
+        GAIT_FREQ_MAX_VX,
+        GAIT_FREQ_SLOPE,
         NATURAL_STAND_RAD,
         RL_PD_GAINS,
         ROOT_DIR,
@@ -46,7 +52,7 @@ class EnvConfig:
     decimation: int = 5
     action_scale: float = 0.42
     nconmax_per_env: int = 16
-    njmax_per_env: int = 64
+    njmax_per_env: int = 128
     enable_pushes: bool = True
     push_interval_s: float = 6.0
     obs_noise: bool = True
@@ -110,8 +116,10 @@ class HumanoidLocomotionEnv(VecEnv):
         self.feet_air_time = torch.zeros((self.num_envs, 2), dtype=torch.float32, device=self.device)
         self.last_contacts = torch.zeros((self.num_envs, 2), dtype=torch.bool, device=self.device)
         self.foot_prev_xy = torch.zeros((self.num_envs, 2, 2), dtype=torch.float32, device=self.device)
+        self.wz_ema = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
 
         self.gravity_vec = torch.tensor([0.0, 0.0, -1.0], device=self.device).unsqueeze(0).expand(self.num_envs, 3)
+        self.cmd_scale = torch.tensor([1.0, 1.0, 0.5], dtype=torch.float32, device=self.device)
 
         # Reset all environments initially
         all_ids = torch.arange(self.num_envs, device=self.device)
@@ -177,6 +185,12 @@ class HumanoidLocomotionEnv(VecEnv):
         self.torso_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
         self.foot_l_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "foot_L")
         self.foot_r_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "foot_R")
+        self.hand_l_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "hand_L")
+        self.hand_r_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "hand_R")
+        self.thigh_l_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "thigh_L")
+        self.thigh_r_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "thigh_R")
+        self.shin_l_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "shin_L")
+        self.shin_r_body_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "shin_R")
         self.sole_l_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "foot_L_sole_site")
         self.sole_r_site_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "foot_R_sole_site")
 
@@ -213,16 +227,36 @@ class HumanoidLocomotionEnv(VecEnv):
         if self.cfg_obj.task == "walk":
             r = torch.rand(n, device=self.device)
             vx = torch.empty(n, device=self.device).uniform_(0.45, 1.35)
-            vx = torch.where(r < 0.10, torch.zeros_like(vx), vx)
-            vx = torch.where((r >= 0.10) & (r < 0.18), torch.empty(n, device=self.device).uniform_(-0.3, 0.3), vx)
             vy = torch.empty(n, device=self.device).uniform_(-0.20, 0.20)
-            wz = torch.empty(n, device=self.device).uniform_(-0.6, 0.6)
+            wz = torch.empty(n, device=self.device).uniform_(-0.65, 0.65)
+
+            straight_mask = (r >= 0.22) & (r < 0.45)
+            vy = torch.where(straight_mask, torch.zeros_like(vy), vy)
+            wz = torch.where(straight_mask, torch.zeros_like(wz), wz)
+
+            slow_mask = (r >= 0.10) & (r < 0.22)
+            vx = torch.where(slow_mask, torch.empty(n, device=self.device).uniform_(-0.30, 0.35), vx)
+            vy = torch.where(slow_mask, torch.empty(n, device=self.device).uniform_(-0.18, 0.18), vy)
+            wz = torch.where(slow_mask, torch.empty(n, device=self.device).uniform_(-0.65, 0.65), wz)
+
+            pure_stand = r < 0.10
+            vx = torch.where(pure_stand, torch.zeros_like(vx), vx)
+            vy = torch.where(pure_stand, torch.zeros_like(vy), vy)
+            wz = torch.where(pure_stand, torch.zeros_like(wz), wz)
         else:
-            vx = torch.empty(n, device=self.device).uniform_(1.2, 2.6)
             r = torch.rand(n, device=self.device)
-            vx = torch.where(r < 0.06, torch.zeros_like(vx), vx)
+            vx = torch.empty(n, device=self.device).uniform_(1.2, 2.6)
             vy = torch.empty(n, device=self.device).uniform_(-0.22, 0.22)
-            wz = torch.empty(n, device=self.device).uniform_(-0.6, 0.6)
+            wz = torch.empty(n, device=self.device).uniform_(-0.65, 0.65)
+
+            straight_mask = (r >= 0.06) & (r < 0.40)
+            vy = torch.where(straight_mask, torch.zeros_like(vy), vy)
+            wz = torch.where(straight_mask, torch.zeros_like(wz), wz)
+
+            pure_stand = r < 0.06
+            vx = torch.where(pure_stand, torch.zeros_like(vx), vx)
+            vy = torch.where(pure_stand, torch.zeros_like(vy), vy)
+            wz = torch.where(pure_stand, torch.zeros_like(wz), wz)
 
         stand_mask = (torch.abs(vx) < 0.12) & (torch.abs(vy) < 0.08) & (torch.abs(wz) < 0.12)
         vx = torch.where(stand_mask, torch.zeros_like(vx), vx)
@@ -253,6 +287,8 @@ class HumanoidLocomotionEnv(VecEnv):
         self.qpos[env_ids] = qpos_reset
         self.qvel[env_ids] = qvel_reset
         self.ctrl[env_ids] = self.default_ctrl.unsqueeze(0).expand(n, -1)
+        self.sensordata[env_ids, self.touch_l_adr] = 0.0
+        self.sensordata[env_ids, self.touch_r_adr] = 0.0
 
         self.episode_length_buf[env_ids] = 0
         self.actions[env_ids] = 0.0
@@ -260,14 +296,14 @@ class HumanoidLocomotionEnv(VecEnv):
         self.feet_air_time[env_ids] = 0.0
         self.last_contacts[env_ids] = False
         self.gait_phase[env_ids] = torch.rand(n, device=self.device)
+        self.wz_ema[env_ids] = 0.0
 
         self._sample_commands(env_ids)
 
     def _compute_observations(self) -> TensorDict:
         quat = self.qpos[:, 3:7]
         lin_vel_body = quat_rotate_inverse(quat, self.qvel[:, 0:3])
-        # TODO(v5): MuJoCo free-joint qvel[:, 3:6] is already in body frame; fix & retrain in v5.
-        ang_vel_body = quat_rotate_inverse(quat, self.qvel[:, 3:6])
+        ang_vel_body = self.qvel[:, 3:6]
         proj_grav = quat_rotate_inverse(quat, self.gravity_vec)
 
         q_act = self.qpos[:, self.act_qpos_idx] - self.default_act_pos
@@ -282,7 +318,7 @@ class HumanoidLocomotionEnv(VecEnv):
             [
                 ang_vel_body * 0.25,
                 proj_grav,
-                self.commands * torch.tensor([1.0, 1.0, 0.5], device=self.device),
+                self.commands * self.cmd_scale,
                 gait_clock,
                 q_act,
                 dq_act * 0.05,
@@ -350,11 +386,14 @@ class HumanoidLocomotionEnv(VecEnv):
             mjw.step(self.mw_model, self.mw_data)
         wp.synchronize()
 
+        # Smooth stride-frequency pelvis yaw oscillation (tau ~ 0.33s at 50Hz) to track true net turning rate
+        self.wz_ema = 0.94 * self.wz_ema + 0.06 * self.qvel[:, 5]
+
         self.episode_length_buf += 1
 
         # Advance gait clock (natural human cadence scaling with speed)
         vx_abs = torch.abs(self.commands[:, 0])
-        gait_freq = 0.90 + 0.35 * torch.clamp(vx_abs, 0.0, 2.0)
+        gait_freq = GAIT_FREQ_BASE + GAIT_FREQ_SLOPE * torch.clamp(vx_abs, 0.0, GAIT_FREQ_MAX_VX)
         self.gait_phase = (self.gait_phase + gait_freq * self.control_dt) % 1.0
 
         # Periodic command resampling and disturbance pushes
@@ -375,10 +414,7 @@ class HumanoidLocomotionEnv(VecEnv):
         dones = terminated | time_outs
 
         # Penalty for early fall termination (not timeout)
-        rewards = torch.where(terminated, rewards - 3.0, rewards)
-
-        # Final obs before reset (for RSL-RL)
-        final_obs = self._compute_observations()
+        rewards = torch.where(terminated, rewards - 2.0, rewards)
 
         done_ids = dones.nonzero(as_tuple=False).squeeze(-1)
         if done_ids.numel() > 0:
@@ -394,7 +430,6 @@ class HumanoidLocomotionEnv(VecEnv):
 
         extras = {
             "time_outs": time_outs,
-            "final_obs": final_obs,
             "log": reward_log,
         }
         return self._obs_td, rewards, dones, extras
@@ -402,8 +437,7 @@ class HumanoidLocomotionEnv(VecEnv):
     def _compute_rewards(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         quat = self.qpos[:, 3:7]
         lin_vel_body = quat_rotate_inverse(quat, self.qvel[:, 0:3])
-        # TODO(v5): MuJoCo free-joint qvel[:, 3:6] is already in body frame; fix & retrain in v5.
-        ang_vel_body = quat_rotate_inverse(quat, self.qvel[:, 3:6])
+        ang_vel_body = self.qvel[:, 3:6]
         proj_grav = quat_rotate_inverse(quat, self.gravity_vec)
 
         q_act = self.qpos[:, self.act_qpos_idx]
@@ -424,51 +458,69 @@ class HumanoidLocomotionEnv(VecEnv):
         standing = ~moving
         moving_f = moving.to(torch.float32)
 
-        # Progress along commanded direction + motion gating so freezing on move commands earns near zero
+        # Progress along commanded direction + low-speed anti-freeze motion gating
         vx_err = (lin_vel_body[:, 0] - self.commands[:, 0]) ** 2
         vy_err = (lin_vel_body[:, 1] - self.commands[:, 1]) ** 2
         lin_vel_err = vx_err + 2.5 * vy_err
         cmd_xy_norm = torch.linalg.norm(self.commands[:, :2], dim=-1)
         cmd_dir = self.commands[:, :2] / torch.clamp(cmd_xy_norm.unsqueeze(-1), min=1e-4)
         proj_speed = torch.sum(lin_vel_body[:, :2] * cmd_dir, dim=-1)
-        speed_ratio = torch.where(
+        xy_gate = torch.clamp(proj_speed / torch.clamp(0.50 * cmd_xy_norm, min=0.20), 0.0, 1.0)
+        wz_abs = torch.abs(self.commands[:, 2])
+        wz_progress = self.wz_ema * torch.sign(self.commands[:, 2])
+        yaw_gate = torch.clamp(wz_progress / torch.clamp(0.50 * wz_abs, min=0.15), 0.0, 1.0)
+        gate_ratio = torch.where(
             cmd_xy_norm > 0.08,
-            torch.clamp(proj_speed / torch.clamp(cmd_xy_norm, min=0.35), 0.0, 1.0),
-            torch.ones_like(cmd_speed),
+            xy_gate,
+            torch.where(wz_abs > 0.08, yaw_gate, torch.ones_like(cmd_speed)),
         )
-        stand_still_vel_rew = (
-            torch.exp(-torch.sum(lin_vel_body[:, :2] ** 2, dim=-1) / 0.02) * 4.5
-            - torch.sum(lin_vel_body[:, :2] ** 2, dim=-1) * 4.0
+        motion_gate = torch.where(moving, 0.15 + 0.85 * gate_ratio, torch.ones_like(cmd_speed))
+
+        stand_vel_sq = torch.sum(lin_vel_body[:, :2] ** 2, dim=-1)
+        stand_still_vel_rew = torch.exp(-stand_vel_sq / 0.02) * 6.0 - torch.clamp(stand_vel_sq, max=1.0) * 1.5
+        rew_lin_vel_move = (
+            torch.exp(-lin_vel_err / 0.30) * 4.0
+            + torch.exp(-lin_vel_err / 0.05) * 3.0
+            + 1.0 * gate_ratio
         )
-        rew_lin_vel = (torch.exp(-lin_vel_err / 0.20) * 4.8 + 1.6 * speed_ratio) * moving_f + stand_still_vel_rew * (1.0 - moving_f)
+        rew_lin_vel = rew_lin_vel_move * moving_f + stand_still_vel_rew * (1.0 - moving_f)
 
-        motion_gate = torch.where(cmd_xy_norm > 0.08, 0.10 + 0.90 * speed_ratio, torch.ones_like(cmd_speed))
+        wz_ema_err = (self.wz_ema - self.commands[:, 2]) ** 2
+        wz_inst_err = (ang_vel_body[:, 2] - self.commands[:, 2]) ** 2
+        rew_ang_vel_move = (
+            torch.exp(-wz_ema_err / 0.12) * 3.5
+            + torch.exp(-wz_ema_err / 0.025) * 3.0
+        ) * motion_gate - torch.clamp(wz_ema_err, max=1.5) * 2.0 - torch.clamp(wz_inst_err, max=4.0) * 0.12
+        rew_ang_vel_stand = (
+            torch.exp(-wz_ema_err / 0.04) * 3.5
+            - torch.clamp(wz_ema_err, max=1.5) * 2.0
+            - torch.clamp(wz_inst_err, max=4.0) * 0.12
+        )
+        rew_ang_vel = rew_ang_vel_move * moving_f + rew_ang_vel_stand * (1.0 - moving_f)
 
-        ang_vel_err = (ang_vel_body[:, 2] - self.commands[:, 2]) ** 2
-        rew_ang_vel = torch.exp(-ang_vel_err / 0.10) * 2.8 * motion_gate - ang_vel_err * 2.0
-
-        # Upright pelvis AND upper torso orientation (sharp Gaussian sweet-spot + quadratic guard)
+        # Bounded upright pelvis AND upper torso orientation
+        is_run = self.cfg_obj.task == "run"
         torso_proj_grav = quat_rotate_inverse(self.xquat[:, self.torso_body_id, :], self.gravity_vec)
-        lean_sin = (0.09 if self.cfg_obj.task == "run" else 0.035) * moving_f
-        torso_err_sq = (torso_proj_grav[:, 0] - lean_sin) ** 2 + 1.5 * (torso_proj_grav[:, 1] ** 2)
+        lean_sin = (0.085 if is_run else 0.035) * moving_f
+        torso_err_sq = (torso_proj_grav[:, 0] - lean_sin) ** 2 + 2.5 * (torso_proj_grav[:, 1] ** 2)
+        pelvis_err_sq = (proj_grav[:, 0] - 0.5 * lean_sin) ** 2 + (proj_grav[:, 1] ** 2)
         rew_orient = (
-            ((proj_grav[:, 0] - 0.5 * lean_sin) ** 2) * -3.5
-            + (proj_grav[:, 1] ** 2) * -4.0
-            + torso_err_sq * -4.5
-            + torch.exp(-torso_err_sq / 0.018) * 1.8 * motion_gate
+            (torch.exp(-torso_err_sq / 0.03) * 2.0 + torch.exp(-pelvis_err_sq / 0.04) * 1.2) * motion_gate
+            - torch.clamp(torso_err_sq + pelvis_err_sq, max=1.0) * 1.5
         )
-        target_z = torch.where(moving, 0.98 if self.cfg_obj.task == "run" else 1.015, 1.036)
-        rew_height = ((self.qpos[:, 2] - target_z) ** 2) * -4.0
+        target_z = torch.where(moving, 0.99 if is_run else 1.015, 1.036)
+        height_err_sq = (self.qpos[:, 2] - target_z) ** 2
+        rew_height = torch.exp(-height_err_sq / 0.008) * 1.0 * motion_gate - torch.clamp(height_err_sq, max=0.25) * 2.0
 
-        # Smooth base velocity
-        vz_weight = -0.35 if self.cfg_obj.task == "run" else -1.0
-        rew_lin_z = (lin_vel_body[:, 2] ** 2) * vz_weight
-        rew_ang_xy = torch.sum(ang_vel_body[:, :2] ** 2, dim=-1) * -0.12
+        # Smooth base velocity (clamped against tumble spikes)
+        vz_weight = -0.35 if is_run else -0.8
+        rew_lin_z = torch.clamp(lin_vel_body[:, 2] ** 2, max=2.0) * vz_weight
+        rew_ang_xy = torch.clamp(torch.sum(ang_vel_body[:, :2] ** 2, dim=-1), max=10.0) * -0.08
 
         # Action smoothness & energy
-        rew_action_rate = torch.sum((self.actions - self.last_actions) ** 2, dim=-1) * -0.02
-        rew_dof_vel = torch.sum(dq_act ** 2, dim=-1) * -1.2e-4
-        rew_torque = torch.sum(torques ** 2, dim=-1) * -5e-6
+        rew_action_rate = torch.clamp(torch.sum((self.actions - self.last_actions) ** 2, dim=-1), max=50.0) * -0.015
+        rew_dof_vel = torch.clamp(torch.sum(dq_act ** 2, dim=-1), max=2000.0) * -1.0e-4
+        rew_torque = torch.clamp(torch.sum(torques ** 2, dim=-1), max=2e5) * -4e-6
 
         # Soft joint limit avoidance
         margin = 0.05 * (self.jnt_high - self.jnt_low)
@@ -476,15 +528,19 @@ class HumanoidLocomotionEnv(VecEnv):
         out_high = torch.clamp(q_act - (self.jnt_high - margin), min=0.0)
         rew_limits = torch.sum(out_low + out_high, dim=-1) * -2.0
 
-        # Spine stillness, straight feet (zero pigeon/duck twist or splay), and ankle roll alignment
-        is_run = self.cfg_obj.task == "run"
+        # Spine stillness, straight feet during straight walk, relaxed smoothly during turning/strafing
+        straight_yaw_w = torch.clamp(1.0 - torch.abs(self.commands[:, 2]) / 0.45, min=0.05, max=1.0)
+        straight_lat_w = torch.clamp(1.0 - torch.abs(self.commands[:, 1]) / 0.22, min=0.15, max=1.0)
+        straight_lat_yaw_w = straight_yaw_w * straight_lat_w
+
         spine_flex_tgt = (0.055 if is_run else 0.02) * moving_f + 0.02 * (1.0 - moving_f)
-        rew_spine_reg = (
-            ((q_act[:, 0] - spine_flex_tgt) ** 2) * -5.5
-            + (q_act[:, 1] ** 2) * -4.5
-            + (q_act[:, 2] ** 2) * -6.0
+        rew_spine_reg = torch.clamp(
+            ((q_act[:, 0] - spine_flex_tgt) ** 2) * -2.5
+            + (q_act[:, 1] ** 2) * -2.5
+            + (q_act[:, 2] ** 2) * (-3.0 * straight_yaw_w),
+            min=-1.5,
         )
-        # Keep hip_twist (5,11), ankle_abd (8,14), hip_abd (4,10) dead-straight so shins swing straight forward
+        # Keep hip_twist (5,11), ankle_abd (8,14), hip_abd (4,10) dead-straight when moving straight
         twist_sq = q_act[:, 5] ** 2 + q_act[:, 11] ** 2
         ank_abd_sq = q_act[:, 8] ** 2 + q_act[:, 14] ** 2
         hip_abd_sq = (q_act[:, 4] + 0.01) ** 2 + (q_act[:, 10] + 0.01) ** 2
@@ -492,15 +548,13 @@ class HumanoidLocomotionEnv(VecEnv):
         sole_r_rel_y = quat_rotate_inverse(quat, self.site_xpos[:, self.sole_r_site_id, :] - self.qpos[:, 0:3])[:, 1]
         foot_track_y_sq = (sole_l_rel_y - 0.18) ** 2 + (sole_r_rel_y + 0.18) ** 2
         rew_leg_align = (
-            twist_sq * -16.0
-            + ank_abd_sq * -18.0
-            + hip_abd_sq * -9.0
-            + foot_track_y_sq * -7.0
-            + torch.exp(-twist_sq / 0.006) * 0.9 * motion_gate
-            + torch.exp(-ank_abd_sq / 0.005) * 0.9 * motion_gate
+            (torch.exp(-twist_sq / 0.008) * 1.2 * motion_gate - torch.clamp(twist_sq, max=0.25) * 4.5) * straight_yaw_w
+            + (torch.exp(-ank_abd_sq / 0.006) * 1.2 * motion_gate - torch.clamp(ank_abd_sq, max=0.20) * 5.5)
+            - torch.clamp(hip_abd_sq, max=0.25) * (3.5 * straight_lat_yaw_w)
+            - torch.clamp(foot_track_y_sq, max=0.20) * (3.5 * straight_lat_yaw_w)
         )
 
-        # Natural contra-lateral arm swing (athletic bent elbows when running, relaxed elbows when walking)
+        # Natural contra-lateral arm swing with safe shoulder abduction & lateral thigh clearance
         hip_diff = q_act[:, 3] - q_act[:, 9]
         arm_gain = 0.75 if is_run else 0.60
         arm_lim = 0.65 if is_run else 0.40
@@ -509,53 +563,70 @@ class HumanoidLocomotionEnv(VecEnv):
         elbow_base = (0.95 if is_run else 0.30) * moving_f + 0.30 * (1.0 - moving_f)
         el_l_tgt = elbow_base + 0.25 * torch.clamp(sh_l_tgt, min=0.0)
         el_r_tgt = elbow_base + 0.25 * torch.clamp(sh_r_tgt, min=0.0)
-        rew_arm_swing = (
-            ((q_act[:, 15] - sh_l_tgt) ** 2 + (q_act[:, 18] - sh_r_tgt) ** 2) * -1.1
-            + ((q_act[:, 15] + q_act[:, 18]) ** 2) * -0.8
-            + ((q_act[:, 17] - el_l_tgt) ** 2 + (q_act[:, 20] - el_r_tgt) ** 2) * -0.7
-            + ((q_act[:, 16] - 0.04) ** 2 + (q_act[:, 19] - 0.04) ** 2) * -2.8
+        inward_arm_guard = (
+            torch.clamp(0.10 - q_act[:, 16], min=0.0) ** 2
+            + torch.clamp(0.10 - q_act[:, 19], min=0.0) ** 2
+        ) * -8.0
+        rew_arm_swing = torch.clamp(
+            ((q_act[:, 15] - sh_l_tgt) ** 2 + (q_act[:, 18] - sh_r_tgt) ** 2) * -0.9
+            + ((q_act[:, 15] + q_act[:, 18]) ** 2) * -0.6
+            + ((q_act[:, 17] - el_l_tgt) ** 2 + (q_act[:, 20] - el_r_tgt) ** 2) * -0.6
+            + ((q_act[:, 16] - 0.16) ** 2 + (q_act[:, 19] - 0.16) ** 2) * -2.6
+            + inward_arm_guard,
+            min=-2.0,
         )
 
-        # Foot contacts & alternating human gait schedule (56% walk vs 42% run with aerial flight phase)
+        hand_l_rel_y = quat_rotate_inverse(quat, self.xpos[:, self.hand_l_body_id, :] - self.qpos[:, 0:3])[:, 1]
+        hand_r_rel_y = quat_rotate_inverse(quat, self.xpos[:, self.hand_r_body_id, :] - self.qpos[:, 0:3])[:, 1]
+        thigh_l_mid = 0.5 * (self.xpos[:, self.thigh_l_body_id, :] + self.xpos[:, self.shin_l_body_id, :])
+        thigh_r_mid = 0.5 * (self.xpos[:, self.thigh_r_body_id, :] + self.xpos[:, self.shin_r_body_id, :])
+        thigh_l_rel_y = quat_rotate_inverse(quat, thigh_l_mid - self.qpos[:, 0:3])[:, 1]
+        thigh_r_rel_y = quat_rotate_inverse(quat, thigh_r_mid - self.qpos[:, 0:3])[:, 1]
+        arm_clear_l = torch.clamp(0.165 - (hand_l_rel_y - thigh_l_rel_y), min=0.0)
+        arm_clear_r = torch.clamp(0.165 - (thigh_r_rel_y - hand_r_rel_y), min=0.0)
+        rew_arm_clearance = torch.clamp(arm_clear_l ** 2 + arm_clear_r ** 2, max=0.03) * -60.0
+
+        # Foot contacts & alternating human gait schedule (56% walk vs 38% run with aerial flight phase)
         touch_l = self.sensordata[:, self.touch_l_adr] > 25.0
         touch_r = self.sensordata[:, self.touch_r_adr] > 25.0
         contacts = torch.stack([touch_l, touch_r], dim=-1)
         contact_filt = contacts | self.last_contacts
 
-        duty = 0.42 if is_run else 0.56
+        duty = 0.38 if is_run else 0.56
         des_l = (self.gait_phase < duty) | standing
         des_r = (((self.gait_phase + 0.5) % 1.0) < duty) | standing
         exact_match = ((contacts[:, 0] == des_l) & (contacts[:, 1] == des_r)).to(torch.float32)
         if is_run:
-            # Penalize any double-support during running AND encourage clean double-flight windows
             both_on_run = (contacts[:, 0] & contacts[:, 1] & moving).to(torch.float32)
-            rew_gait_phase = exact_match * 2.0 - both_on_run * 0.65
+            flight_win_hit = ((~des_l) & (~des_r) & (~contacts[:, 0]) & (~contacts[:, 1]) & moving).to(torch.float32)
+            rew_gait_phase = exact_match * 2.2 - both_on_run * 0.85 + flight_win_hit * 0.90
         else:
             single_support_des = des_l ^ des_r
             both_stuck_ss = (contacts[:, 0] & contacts[:, 1] & single_support_des & moving).to(torch.float32)
-            rew_gait_phase = exact_match * 1.6 - both_stuck_ss * 0.45
+            rew_gait_phase = exact_match * 1.8 - both_stuck_ss * 0.45
 
         # Straight stance knee in walk, springy stance knee in run; cap excessive high-kicks
         stance_knee_lim = 0.40 if is_run else 0.24
         stance_l_f = des_l.to(torch.float32) * moving_f
         stance_r_f = des_r.to(torch.float32) * moving_f
         max_swing_knee = 1.25 if is_run else 0.98
-        rew_stance_knee = (
+        rew_stance_knee = torch.clamp(
             (torch.clamp(q_act[:, 6] - stance_knee_lim, min=0.0) ** 2 * stance_l_f
-             + torch.clamp(q_act[:, 12] - stance_knee_lim, min=0.0) ** 2 * stance_r_f) * -2.2
+             + torch.clamp(q_act[:, 12] - stance_knee_lim, min=0.0) ** 2 * stance_r_f) * -1.8
             + (torch.clamp(q_act[:, 6] - max_swing_knee, min=0.0) ** 2
-               + torch.clamp(q_act[:, 12] - max_swing_knee, min=0.0) ** 2) * -3.5
+               + torch.clamp(q_act[:, 12] - max_swing_knee, min=0.0) ** 2) * -2.5,
+            min=-1.5,
         )
 
         # Level foot sole lateral roll in BOTH stance and swing so lifted foot never tilts sideways
         foot_l_grav = quat_rotate_inverse(self.xquat[:, self.foot_l_body_id, :], self.gravity_vec)
         foot_r_grav = quat_rotate_inverse(self.xquat[:, self.foot_r_body_id, :], self.gravity_vec)
-        rew_foot_flat = (foot_l_grav[:, 1] ** 2 + foot_r_grav[:, 1] ** 2) * -6.0
+        rew_foot_flat = torch.clamp(foot_l_grav[:, 1] ** 2 + foot_r_grav[:, 1] ** 2, max=0.5) * -3.5
 
         # Air time reward on touchdown
         first_contact = (self.feet_air_time > 0.0) & contact_filt
         self.feet_air_time += self.control_dt
-        air_gain = 2.8 if is_run else 2.2
+        air_gain = 3.0 if is_run else 2.5
         air_max = 0.34 if is_run else 0.28
         rew_air_time = torch.sum(
             torch.clamp(self.feet_air_time - 0.06, min=0.0, max=air_max) * first_contact.to(torch.float32),
@@ -572,10 +643,9 @@ class HumanoidLocomotionEnv(VecEnv):
         swing_des = torch.stack([~des_l, ~des_r], dim=-1).to(torch.float32)
         target_clr = 0.12 if is_run else 0.075
         max_clr = 0.24 if is_run else 0.13
-        rew_clearance = (
-            torch.sum(torch.clamp((sole_z - 0.01) / target_clr, 0.0, 1.0) * swing_des, dim=-1) * 1.4
-            - torch.sum(torch.clamp(sole_z - max_clr, min=0.0) ** 2, dim=-1) * 8.0
-        ) * moving_f
+        swing_clr = torch.sum(torch.clamp((sole_z - 0.01) / target_clr, 0.0, 1.0) * swing_des, dim=-1)
+        excess_clr_sq = torch.sum(torch.clamp(sole_z - max_clr, min=0.0) ** 2, dim=-1)
+        rew_clearance = (1.5 * swing_clr - torch.clamp(excess_clr_sq, max=0.1) * 5.0) * moving_f
 
         # Foot slip penalty during stance
         foot_cur_xy = torch.stack(
@@ -584,12 +654,16 @@ class HumanoidLocomotionEnv(VecEnv):
         )
         foot_vel_xy = (foot_cur_xy - self.foot_prev_xy) / self.control_dt
         slip_sq = torch.sum(foot_vel_xy ** 2, dim=-1) * contacts.to(torch.float32)
-        rew_slip = torch.sum(slip_sq, dim=-1) * -0.25
+        rew_slip = torch.clamp(torch.sum(slip_sq, dim=-1), max=4.0) * -0.22
 
         # Stand still regularization toward tall natural posture
-        rew_stand = torch.sum(torch.abs(q_act - self.natural_stand_pos), dim=-1) * standing.to(torch.float32) * -1.4
+        rew_stand = (
+            torch.clamp(torch.sum(torch.abs(q_act - self.natural_stand_pos), dim=-1), max=4.0)
+            * standing.to(torch.float32)
+            * -1.0
+        )
 
-        rew_alive = torch.full((self.num_envs,), 0.20, device=self.device)
+        rew_alive = torch.full((self.num_envs,), 0.30, device=self.device)
 
         raw_rate = (
             rew_lin_vel
@@ -605,6 +679,7 @@ class HumanoidLocomotionEnv(VecEnv):
             + rew_spine_reg
             + rew_leg_align
             + rew_arm_swing
+            + rew_arm_clearance
             + rew_gait_phase
             + rew_stance_knee
             + rew_foot_flat
@@ -626,6 +701,7 @@ class HumanoidLocomotionEnv(VecEnv):
             "Episode/torso_sin": torso_proj_grav[:, 0].mean(),
             "Episode/pelvis_z": self.qpos[:, 2].mean(),
             "Episode/vel_x": lin_vel_body[:, 0].mean(),
+            "Episode/wz": self.wz_ema.mean(),
         }
         return total_reward, log
 

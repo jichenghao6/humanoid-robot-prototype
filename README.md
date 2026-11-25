@@ -8,15 +8,15 @@ An end-to-end bipedal humanoid project spanning procedural **Three.js** CAD/rigg
 
 ### Gait Showcase | 步态效果展示
 
-**Walk (`vx = 0.9 m/s`, upright `torso_pitch = +0.3°`, `pelvis_z = 1.032 m`, symmetric forward swing):**
+**Walk (`v5`, `vx = 0.9 m/s`, `actual = 0.893 m/s` (`-0.7%` error), `pelvis_z = 1.033 m`, `torso_pitch = -1.1°`, `91%` fewer self-collisions):**
 
-![Walk Side](docs/images/walk_v4_side.png)
-![Walk Front](docs/images/walk_v4_front.png)
+![Walk Side](docs/images/walk_v5_side.png)
+![Walk Front](docs/images/walk_v5_front.png)
 
-**Run (`vx = 2.2 m/s`, evaluated up to `2.34 m/s`, `elbow ≈ 62°–69°`, `150 N` push recovery):**
+**Run (`v5`, `vx = 2.2 m/s`, `arm_leg_corr = 0.994`, `roll_std = 2.01°`, `0` self-collisions, `150 N` forward & lateral push recovery):**
 
-![Run Side](docs/images/run_v1_side.png)
-![Run Front](docs/images/run_v1_front.png)
+![Run Side](docs/images/run_v5_side.png)
+![Run Front](docs/images/run_v5_front.png)
 
 ---
 
@@ -24,12 +24,12 @@ An end-to-end bipedal humanoid project spanning procedural **Three.js** CAD/rigg
 
 * **Height & Mass**: `1.800 m` tall, `81.40 kg` across `57` procedural structural parts (`35` entry types)
 * **Articulation**: `35` active semantic DOFs (`+ 10` coupled finger DOFs + `6` floating-base DOFs) exported to MuJoCo (`34` joints, `33` position servos, `15`-dim onboard sensor suite)
-* **RL Control Policy**: `21`-DOF core locomotion policy (`50 Hz` control at `sim_dt=0.004 s`, `decimation=5`), asymmetric Actor (`74`-dim noisy obs) / Critic (`82`-dim privileged obs), trained with `1024` parallel GPU environments (`MuJoCo-Warp` + `RSL-RL 6.0.0`)
+* **RL Control Policy (`v5`)**: `21`-DOF core locomotion policy (`50 Hz` control at `sim_dt=0.004 s`, `decimation=5`), asymmetric Actor (`74`-dim noisy obs) / Critic (`82`-dim privileged obs), trained with `1024` parallel GPU environments (`MuJoCo-Warp` + `RSL-RL 6.0.0`), featuring bit-exact `yaw = 0° / 180°` observation invariance, `wz_ema` stride-filtered turning, and lateral arm-thigh clearance shaping
 * **Pretrained Models Included** (`mujoco/rl/checkpoints/`):
-  * `latest_walk.pt` / `latest_walk.onnx` — stand (`0.0002 m/s`), slow/normal/fast walk (`0.55–1.36 m/s`), turning, `150 N` push recovery
-  * `latest_run.pt` / `latest_run.onnx` — jog to fast run (`1.43–2.34 m/s`), turning, `150 N` push recovery
+  * `latest_walk.pt` / `latest_walk.onnx` (`v5`) — stand (`0.002 m/s`), slow/normal/fast walk (`0.590–1.126 m/s`, `-0.7%` error at `0.9 m/s`), strafe (`vy = +0.227 m/s`), turning (`+0.102 / -0.214 rad/s`), `150 N` push recovery
+  * `latest_run.pt` / `latest_run.onnx` (`v5`) — stand (`0.002 m/s`), jog to fast run (`1.388–2.364 m/s`), genuine zero-force aerial flight (`3.25%` at `2.2 m/s` up to `5.0%` at `2.6 m/s`), turning (`+0.430 / -0.370 rad/s`), `0` self-collisions, `150 N` forward & lateral push recovery
 
-For full architecture diagrams, Phase 1–3 benchmarks, and Walk `v1 -> v4` biomechanical debugging logs, see the **[Technical Report](docs/TECHNICAL_REPORT.md)**.
+For full architecture diagrams, Phase 1–3 benchmarks, and `v1 -> v5` biomechanical debugging logs, see the **[Technical Report](docs/TECHNICAL_REPORT.md)**.
 
 ---
 
@@ -104,11 +104,11 @@ python mujoco/verify_mujoco.py
 # Phase 2: Classical closed-loop balance, squat cycles, single-leg weight shift, and ROM audit
 python mujoco/phase2_controller.py
 
-# Phase 3: Train Walk or Run on CUDA GPU (RTX 4070 / CUDA 12.6)
-# Note: latest_walk.pt (v4) was fine-tuned via curriculum resume (v1 -> v4); cold-start training may need tuning.
+# Phase 3: Train Walk (cold-start) or Run (curriculum from Walk) on CUDA GPU (RTX 4070 / CUDA 12.6)
+# Note: latest_walk.pt (v5) supports stable cold-start Walk training + curriculum polish and Run curriculum transfer.
 # By default train.py writes only to mujoco/rl/logs/; pass --update-checkpoints to overwrite curated checkpoints.
 python mujoco/rl/train.py --task walk --num_envs 1024 --max_iterations 220
-python mujoco/rl/train.py --task run --num_envs 1024 --max_iterations 240 --resume mujoco/rl/checkpoints/latest_walk.pt
+python mujoco/rl/train.py --task run --num_envs 1024 --max_iterations 200 --resume mujoco/rl/checkpoints/latest_walk.pt
 ```
 
 ---

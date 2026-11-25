@@ -94,19 +94,19 @@ Trained on a single consumer laptop GPU using zero-copy PyTorch ↔ Warp CUDA bu
 | --- | --- |
 | GPU / Driver | `NVIDIA GeForce RTX 4070 Laptop GPU` (8 GiB), CUDA Toolkit `13.4` / Driver `13.2` |
 | Python & Packages | Python `3.12.10`, `torch==2.14.1+cu126`, `mujoco==4.0.1`, `mujoco-warp==4.0.1`, `warp-lang==1.19.0`, `rsl-rl-lib==6.0.0`, `tensordict==0.15.6`, `onnx==1.23.2`, `onnxscript==0.7.2` |
-| Parallel Simulation | `1024` environments, `nconmax=16`, `njmax=64` per environment |
+| Parallel Simulation | `1024` environments, `nconmax=16`, `njmax=128` per environment (`v5`) |
 | Integrator & Timestep | `mjINT_IMPLICITFAST`, `sim_dt = 0.004 s`, `decimation = 5` (`50 Hz` control, `control_dt = 0.02 s`), `iterations = 8`, `ls_iterations = 8` |
-| Throughput | `~14,000–15,900 RL steps/s` (`~70,000–79,500 sim steps/s`, `~1.6–1.9 s` per `24,576`-step PPO iteration) |
+| Throughput | `~14,900–15,900 RL steps/s` (`~74,500–79,500 sim steps/s`, `~1.6–1.7 s` per `24,576`-step PPO iteration at peak GPU boost) |
 | Disturbance Curriculum | Random XY base velocity perturbations every `6.0 s` (`uniform(-0.32, +0.32) m/s`), commands resampled every `5.0 s` |
 
 ### 4.2 Observation, Action & Network Spaces
 
 * **Action space (`21`-dim)**: `ACTION_JOINT_NAMES` controls `spine_lower` (`3`), left leg (`6`: `hip_{flex,abd,twist}`, `knee_flex`, `ankle_{flex,abd}`), right leg (`6`), and left/right arms (`6`: `shoulder_{flex,abd}`, `elbow_flex`). Distal joints (`spine_upper`, `neck`, `head`, `shoulder_twist`, `wrist`) hold neutral PD targets (`0`). Actions are clipped to `[-3.0, 3.0]` and scaled by `action_scale = 0.42` around `DEFAULT_ANGLES_RAD`.
 * **Actor Observation (`74`-dim `"policy"`, with Gaussian noise during training)**:
-  - Pelvis body angular velocity (`3`, `* 0.25`)
+  - Pelvis body angular velocity (`3`, `* 0.25`; direct `qvel[3:6]` without double-rotation in `v5`)
   - Projected gravity vector in pelvis frame (`3`)
   - Velocity command `[vx, vy, wz * 0.5]` (`3`)
-  - Gait clock `[sin(2πφ), cos(2πφ)] * moving_mask` (`2`), where `gait_freq = 0.90 + 0.35 * clamp(|vx|, 0, 2.0)`
+  - Gait clock `[sin(2πφ), cos(2πφ)] * moving_mask` (`2`), where `gait_freq = 0.90 + 0.35 * clamp(|vx|, 0, 2.4)` (`v5`)
   - Joint position offsets `q - q_default` (`21`)
   - Joint velocities `dq * 0.05` (`21`)
   - Previous actions (`21`)
@@ -117,7 +117,7 @@ Trained on a single consumer laptop GPU using zero-copy PyTorch ↔ Warp CUDA bu
 
 ## 5. Iterative Biomechanical Tuning Case Studies
 
-Achieving stable **and** natural human-like locomotion required resolving four concrete failure modes observed in rollout telemetry and visual inspection:
+Achieving stable **and** natural human-like locomotion required resolving five concrete failure modes observed in rollout telemetry and visual inspection:
 
 ### Case Study 1: Eliminating the Standing-Still Local Minimum
 
@@ -163,47 +163,73 @@ Resuming from `latest_walk.pt` (`v4`) for `240` GPU iterations (`~6.8 min`) with
 - `elbow_L_flex = +62.3°`, `elbow_R_flex = +69.3°`, `torso_pitch = +4.3°`, `roll_std = 2.7°`
 - Note on gait phase: at `cmd vx=2.2 m/s`, the policy uses single-support `86.7%`, double-support `11.3%`, and brief double-flight aerial phase `2.0%` (brisk athletic stride; increasing flight duration further is a direct follow-up via higher `both_on_run` penalty and raised `target_z`).
 
-**Run Side & Front Sequences:**
-![Run Side](images/run_v1_side.png)
-![Run Front](images/run_v1_front.png)
+**Run (`v4`, historical reference):**
+![Run v4 Side](images/run_v1_side.png)
+![Run v4 Front](images/run_v1_front.png)
+
+### Case Study 5: `v5` Full Retraining — Yaw-Invariant Frame, Cold-Start Reward Geometry, `wz_ema` Turning & Arm Clearance (`v4` -> `v5`)
+
+`v5` resolved all five `v4` architectural limitations simultaneously across both Walk (`latest_walk.pt`) and Run (`latest_run.pt`):
+
+1. **Free-joint `qvel[:, 3:6]` frame bug fix -> bit-exact yaw invariance**: Confirmed in both CPU `mujoco` and GPU `mujoco_warp` that MuJoCo's `free` joint angular velocity (`qvel[3:6]`) is already expressed in the local body frame (matching `pelvis_gyro`). Removing the erroneous `quat_rotate_inverse` call in `humanoid_env.py` and `play.py` yielded bit-exact `yaw = 0° / 180°` symmetry in closed-loop evaluations (`Walk 0.9`: `xy = (+8.536, -1.176)` vs `(-8.536, +1.176)`; `Run 2.0`: `xy = (+19.377, +0.986)` vs `(-19.377, -0.986)`).
+2. **Reset touch-sensor clearing & `njmax_per_env = 128`**: Explicitly zeroing `self.sensordata[env_ids, touch_{l,r}_adr] = 0.0` in `_reset_idx` eliminated stale post-fall contact flags, while raising `njmax_per_env` from `64` to `128` prevented solver constraint overflows during early falls (and actually ran slightly faster in warp kernels than `64`).
+3. **Cold-start non-negative reward floor & saturating `motion_gate`**: Replacing `clamp(raw_rate, min=0.0)` with a negative floor (`-0.5`) combined with unbounded quadratic penalties during early trials caused cold-start Walk collapse (`vel_x = 0.027 m/s`, leaning backward). Restoring bounded/clamped penalties with `clamp(raw_rate, min=0.0)` + `-2.0` early fall penalty enabled clean cold-start convergence from iteration 0, while saturating `motion_gate` at `0.50 * cmd_xy_norm` flattened the gradient around the target speed and eliminated `v4`'s `+20.1%` Walk overshoot (`1.081 -> 0.893 m/s`, **`-0.7%` error** at `vx=0.9`).
+4. **Stride-frequency pelvis yaw oscillation & `wz_ema` turning reward**: In bipedal locomotion, instantaneous `qvel[:, 5]` oscillates naturally by `±1.0 rad/s` per step, drowning narrow Gaussian yaw tracking. Filtering `self.wz_ema = 0.94 * self.wz_ema + 0.06 * self.qvel[:, 5]` (`tau ≈ 0.33 s` at `50 Hz`) and relaxing lateral/twist locks smoothly when `|cmd_wz| > 0` raised Walk turning (`-0.089 -> -0.214 rad/s` right, `+0.102 rad/s` left) and boosted Run turning **`5.3x`** (`+0.081 -> +0.430 rad/s` left, `-0.370 rad/s` right).
+5. **Lateral hand-thigh clearance & Run aerial flight shaping**: Widening neutral `shoulder_abd` (`0.08 -> 0.11 rad`, reward target `0.16 rad` with `< 0.10 rad` guard and `0.165 m` hand-thigh clearance) cut Walk 6s self-collisions by **91%** (`69` substeps across `4` pairs in `v4` -> `6` substeps / `-3.0 mm` on `hand_L-thigh_L` only, `0` on right side) and achieved **`0` self-collisions** in Run `v5` (`arm_leg_corr = 0.994`, `roll_std = 2.01°`). Combined with Run `duty = 0.38` (`both_on_run = -0.85`, `flight_win_hit = +0.90`), Run `v5` exhibits speed-scaling zero-force (`<= 5 N`) double-float flight (`0.3%` at `1.4 m/s`, `1.8%` at `2.0 m/s`, `3.25%` at `2.2 m/s`, `4.3%` at `2.4 m/s`, `5.0%` at `2.6 m/s`).
+
+**Walk & Run `v5` Side & Front Sequences:**
+![Walk v5 Side](images/walk_v5_side.png)
+![Walk v5 Front](images/walk_v5_front.png)
+![Run v5 Side](images/run_v5_side.png)
+![Run v5 Front](images/run_v5_front.png)
 
 ---
 
-## 6. Quantitative Benchmark Results (Post-Final-Edit Verification)
+## 6. Quantitative Benchmark Results (`v5`, Post-Final-Edit Verification)
 
-All checks below ran after the final edit to `mujoco/rl/humanoid_env.py` on standard CPU MuJoCo (`play.py`, `rc=0`, **0 falls** across every scenario):
+All checks below ran after the final edit to `mujoco/rl/humanoid_env.py` on standard CPU MuJoCo (`play.py` `run_eval` averaging over `t = 0.5..10.0 s`, `rc=0`, **0 falls** across every table row):
 
-### 6.1 Walk Policy (`mujoco/rl/checkpoints/latest_walk.pt`)
-
-| Scenario | Command `[vx, vy, wz]` | Duration | Actual `mean_vx` | Actual `mean_wz` | Final `(x, y)` | Pelvis `(min_z / final_z)` |
-| --- | --- | --- | --- | --- | --- | --- |
-| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `0.000 m/s` | `-0.004 rad/s` | `(-0.004, -0.007) m` | `1.021 / 1.032 m` |
-| Slow Walk | `[0.55, 0.0, 0.0]` | `10 s` | `0.657 m/s` | `+0.057 rad/s` | `(6.130, 1.114) m` | `1.010 / 1.033 m` |
-| Normal Walk | `[0.9, 0.0, 0.0]` | `10 s` | `1.081 m/s` | `+0.045 rad/s` | `(10.184, 1.239) m` | `0.997 / 1.030 m` |
-| Fast Walk | `[1.25, 0.0, 0.0]` | `10 s` | `1.365 m/s` | `+0.015 rad/s` | `(13.041, -0.340) m` | `0.978 / 1.023 m` |
-| Walk + `150 N` Push | `[0.9, 0.0, 0.0]` (`150 N @ 3.0..3.2s`) | `10 s` | `1.075 m/s` | `+0.013 rad/s` | `(10.336, -0.210) m` | `0.909 / 1.031 m` |
-| Turning Walk | `[0.8, 0.0, 0.5]` | `10 s` | `0.978 m/s` | `+0.169 rad/s` | `(5.808, 5.869) m` | `1.003 / 1.049 m` |
-
-### 6.2 Run Policy (`mujoco/rl/checkpoints/latest_run.pt`)
+### 6.1 Walk Policy (`v5`: `mujoco/rl/checkpoints/latest_walk.pt` / `.onnx`)
 
 | Scenario | Command `[vx, vy, wz]` | Duration | Actual `mean_vx` | Actual `mean_wz` | Final `(x, y)` | Pelvis `(min_z / final_z)` |
 | --- | --- | --- | --- | --- | --- | --- |
-| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `0.030 m/s` | `-0.062 rad/s` | `(0.304, 0.122) m` | `0.992 / 1.014 m` |
-| Jog | `[1.4, 0.0, 0.0]` | `10 s` | `1.426 m/s` | `-0.022 rad/s` | `(13.567, -1.810) m` | `0.990 / 1.016 m` |
-| Run | `[2.0, 0.0, 0.0]` | `10 s` | `2.105 m/s` | `-0.036 rad/s` | `(19.818, -3.048) m` | `0.950 / 0.967 m` |
-| Fast Run | `[2.4, 0.0, 0.0]` | `10 s` | `2.341 m/s` | `-0.029 rad/s` | `(22.196, -1.982) m` | `0.931 / 0.938 m` |
-| Run + `150 N` Push | `[2.0, 0.0, 0.0]` (`150 N @ 3.0..3.2s`) | `10 s` | `2.142 m/s` | `-0.025 rad/s` | `(20.359, -1.737) m` | `0.926 / 0.960 m` |
-| Turning Run | `[1.8, 0.0, 0.5]` | `10 s` | `1.875 m/s` | `+0.081 rad/s` | `(15.345, 8.447) m` | `0.964 / 1.006 m` |
+| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `+0.002 m/s` | `+0.002 rad/s` | `(-0.005, -0.001) m` | `1.021 / 1.035 m` |
+| Slow Walk | `[0.55, 0.0, 0.0]` | `10 s` | `0.590 m/s` | `-0.048 rad/s` | `(5.573, -0.980) m` | `1.017 / 1.038 m` |
+| Normal Walk (`yaw=0°`) | `[0.9, 0.0, 0.0]` | `10 s` | **`0.893 m/s`** (`-0.7%`) | `-0.031 rad/s` | `(8.536, -1.176) m` | `1.001 / 1.038 m` |
+| Normal Walk (`yaw=180°`) | `[0.9, 0.0, 0.0]` (`180°` yaw) | `10 s` | `0.925 m/s` (`t=2..10s`, bit-exact) | `-0.036 rad/s` | `(-8.536, +1.176) m` | `1.001 / 1.038 m` |
+| Fast Walk | `[1.25, 0.0, 0.0]` | `10 s` | `1.126 m/s` | `-0.042 rad/s` | `(10.548, -2.375) m` | `0.987 / 1.041 m` |
+| Walk + `150 N` Forward Push | `[0.9, 0.0, 0.0]` (`+X 150 N @ 3.0..3.2s`) | `10 s` | `0.942 m/s` | `-0.018 rad/s` | `(9.058, -0.651) m` | `0.963 / 1.038 m` |
+| Turn Left | `[0.8, 0.0, +0.5]` | `10 s` | `0.785 m/s` | `+0.102 rad/s` | `(5.657, +4.498) m` | `0.996 / 1.042 m` |
+| Turn Right | `[0.8, 0.0, -0.5]` | `10 s` | `0.811 m/s` | `-0.214 rad/s` | `(3.290, -6.183) m` | `0.997 / 1.054 m` |
+| Strafe Left | `[0.0, +0.2, 0.0]` | `10 s` | `0.144 m/s` (`vy=+0.227 m/s`) | `+0.021 rad/s` | `(1.038, +2.208) m` | `1.010 / 1.033 m` |
+
+Walk `v5` steady-state biomechanics (`cmd vx=0.9`, `t=2..10 s`): `torso_pitch = -1.12° [-4.8°, +2.6°]`, `roll_std = 2.49°`, `pelvis_z_mean = 1.033 m`, `knee L/R = [5.7°..62.7°] / [-0.3°..62.5°]`, `arm_leg_corr = +0.927`, 6s non-floor self-collisions `{('hand_L', 'thigh_L'): 5 substeps (-3.0 mm)}` (`-91%` vs `v4`, `0` on right side).
+
+### 6.2 Run Policy (`v5`: `mujoco/rl/checkpoints/latest_run.pt` / `.onnx`)
+
+| Scenario | Command `[vx, vy, wz]` | Duration | Actual `mean_vx` | Actual `mean_wz` | Final `(x, y)` | Pelvis `(min_z / final_z)` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Stand | `[0.0, 0.0, 0.0]` | `8 s` | `+0.002 m/s` | `-0.003 rad/s` | `(-0.022, -0.012) m` | `1.022 / 1.044 m` |
+| Jog | `[1.4, 0.0, 0.0]` | `10 s` | `1.388 m/s` (`-0.8%`) | `-0.008 rad/s` | `(13.127, -1.842) m` | `0.978 / 1.006 m` |
+| Run (`yaw=0°`) | `[2.0, 0.0, 0.0]` | `10 s` | `2.049 m/s` (`+2.5%`) | `+0.032 rad/s` | `(19.377, +0.986) m` | `0.947 / 0.969 m` |
+| Run (`yaw=180°`) | `[2.0, 0.0, 0.0]` (`180°` yaw) | `10 s` | `2.155 m/s` (`t=2..10s`, bit-exact) | `+0.043 rad/s` | `(-19.377, -0.986) m` | `0.947 / 0.969 m` |
+| Fast Run | `[2.4, 0.0, 0.0]` | `10 s` | `2.364 m/s` (`-1.5%`) | `-0.026 rad/s` | `(22.293, -2.889) m` | `0.947 / 0.964 m` |
+| Run + `150 N` Forward Push | `[2.0, 0.0, 0.0]` (`+X 150 N @ 3.0..3.2s`) | `10 s` | `2.086 m/s` | `+0.037 rad/s` | `(19.728, +1.041) m` | `0.940 / 0.975 m` |
+| Run + `150 N` Lateral Push | `[2.0, 0.0, 0.0]` (`+Y 150 N @ 3.0..3.2s`) | `10 s` | `2.155 m/s` (`t=2..10s`, bit-exact `0°/180°`) | `+0.062 rad/s` | `(18.972, +3.546) m` | `0.950 / 0.971 m` |
+| Turn Left | `[1.8, 0.0, +0.5]` | `10 s` | `1.864 m/s` | **`+0.430 rad/s`** | `(-5.566, +6.385) m` | `0.929 / 1.008 m` |
+| Turn Right | `[1.8, 0.0, -0.5]` | `10 s` | `1.759 m/s` | **`-0.370 rad/s`** | `(-5.537, -9.450) m` | `0.964 / 1.000 m` |
+| Strafe Left | `[1.6, +0.2, 0.0]` | `10 s` | `1.675 m/s` (`vy=+0.156 m/s`) | `-0.009 rad/s` | `(15.946, -1.878) m` | `0.950 / 1.007 m` |
+
+Run `v5` steady-state biomechanics (`cmd vx=2.2`, `t=2..10 s`, `mean_vx = 2.327 m/s`, `final_xy = (20.921, -1.933) m`): `torso_pitch = +3.95° [+1.1°, +7.3°]`, `roll_std = 2.01°`, `pelvis_z_mean = 0.978 m`, `knee L/R = [5.3°..90.0°] / [1.8°..91.3°]`, `elbow L/R = 37.3° / 41.1°`, `hip_tw = (+0.65°, -0.13°)`, `ank_abd = (+0.96°, +0.70°)`, `arm_leg_corr = +0.994`, **0 non-floor self-collisions** across 1,500 physics substeps (`6 s`), and double-float (`touch_L <= 5 N & touch_R <= 5 N`) aerial flight fraction scaling from `1.8%` (`2.0 m/s`) -> `3.25%` (`2.2 m/s`) -> `4.3%` (`2.4 m/s`) -> `5.0%` (`2.6 m/s`).
 
 ### 6.3 Software, Build & Model Checks
 
-* **ONNX Runtime Contract**: Both `latest_walk.onnx` and `latest_run.onnx` (`280.9 KB` each) pass `onnx.checker.check_model` with input `obs: [1, 74]` and output `actions: [1, 21]`.
+* **ONNX Runtime Contract & PyTorch Parity**: Both `latest_walk.onnx` and `latest_run.onnx` pass `onnx.checker.check_model` with input `obs: [1, 74]` and output `actions: [1, 21]`. Over 50 random observations and 5 s closed-loop CPU MuJoCo rollouts, `.pt` vs `.onnx` maximum action difference is `9.54e-7` (Walk `v5`) and `1.91e-6` (Run `v5`), with identical trajectories.
 * **Web Prototype & TypeScript**: `npm run typecheck`, `npm test` (`16/16` in `tests/robot.test.ts`), and `npm run build` pass cleanly (`rc=0`).
+* **CPU-Only Viewer Isolation**: `play.py` runs purely on `mujoco` + `numpy` + `onnxruntime` / `onnx` without importing `torch`, `tensordict`, `rsl_rl`, `warp`, or `mujoco_warp`.
 
-### 6.4 Known Limitations & v5 Roadmap
+### 6.4 Artifact Packaging & Remaining Boundaries
 
-1. **Free-joint angular velocity frame (`qvel[:, 3:6]`)**: In MuJoCo, `free` joint `qvel[3:6]` is already expressed in the body frame, whereas `humanoid_env.py` and `play.py` currently pass it through `quat_rotate_inverse` (kept as-is for `v4` checkpoint compatibility). Removing this extra rotation and retraining in `v5` will make angular-velocity observations yaw-invariant.
-2. **Turning yaw-rate under-response**: Unconditional `hip_twist` (`-16.0`), `spine_lower_twist` (`-6.0`), and foot-track Y penalties restrict yaw turning (`+0.169 rad/s` on Walk `wz=0.5`, `+0.081 rad/s` on Run `wz=0.5`). `v5` will relax twist/track penalties proportionally when `|cmd_wz| > 0` or `|cmd_vy| > 0`.
-3. **Speed overshoot (`~+20%` in Walk)**: The clamped `speed_ratio` term inside `rew_lin_vel` and `motion_gate` creates an asymmetric gradient around `cmd_vx`. `v5` will center tracking around the exact commanded velocity and decouple `motion_gate` from `speed_ratio` clipping.
-4. **Light hand/forearm-to-thigh brushing**: Tight `shoulder_abd` (`0.04 rad`) causes brief `2–14 mm` hand/forearm-to-thigh grazing contacts during vigorous swing. `v5` will widen neutral shoulder abduction (`0.10–0.14 rad`) and add a non-foot self-contact penalty.
-5. **Reset touch-sensor clearing & `njmax`**: `v5` will explicitly zero `sensordata` touch channels on `_reset_idx` and raise `njmax_per_env` from `64` to `96–128` to prevent constraint overflow during early-training falls.
+1. **Curated `v5` Checkpoints (`mujoco/rl/checkpoints/`)**: `latest_walk.pt`, `latest_walk.onnx`, `latest_run.pt`, and `latest_run.onnx` are overwritten with verified `v5` weights; `train.py` writes only to `mujoco/rl/logs/` unless `--update-checkpoints` is explicitly passed.
+2. **Walk `v5` Left-Right Turn Symmetry & Backward Gait**: Turn Right reaches `-0.214 rad/s` while Turn Left is `+0.102 rad/s` (still slightly gentler than Run's `+0.430 / -0.370 rad/s`), and continuous pure backward walking (`[-0.3, 0, 0]`) was only lightly sampled (`12%` mixed slow band) so Walk `v5` primarily targets stand, omni-forward, strafe, and turning; Walk `v5` recovers from `150 N` forward (`+X`) pushes without falling, while Run `v5` recovers from `150 N` pushes in both forward (`+X`) and lateral (`+Y`) directions.
+3. **Aerial Flight Ratio**: Increasing Run double-float flight fraction beyond `3.25–5.0%` toward `10%+` (parkour/sprint) is straightforward by raising `both_on_run` penalty and `target_z` in a future Run curriculum pass.

@@ -20,6 +20,9 @@ if str(THIS_DIR) not in sys.path:
 
 from model_config import (
     ACTION_JOINT_NAMES,
+    GAIT_FREQ_BASE,
+    GAIT_FREQ_MAX_VX,
+    GAIT_FREQ_SLOPE,
     SCENE_XML,
     configure_mj_model_for_rl,
     quat_rotate_inverse_np,
@@ -136,8 +139,7 @@ def make_policy_obs(
     last_actions: np.ndarray,
 ) -> np.ndarray:
     quat = np.asarray(data.qpos[3:7], dtype=np.float64)
-    # TODO(v5): MuJoCo free-joint qvel[3:6] is already in body frame; kept for v4 checkpoint compatibility.
-    ang_vel = quat_rotate_inverse_np(quat, data.qvel[3:6])
+    ang_vel = np.asarray(data.qvel[3:6], dtype=np.float32)
     proj_grav = quat_rotate_inverse_np(quat, np.array([0.0, 0.0, -1.0], dtype=np.float64))
 
     q_act = (data.qpos[idx["qpos_idx"]] - idx["default_act_pos"]).astype(np.float32)
@@ -223,7 +225,7 @@ def run_eval(
                 mujoco.mjv_applyPerturbForce(m, data, viewer_pert)
             mujoco.mj_step(m, data)
 
-        freq = 0.90 + 0.35 * min(abs(float(cmd[0])), 2.0)
+        freq = GAIT_FREQ_BASE + GAIT_FREQ_SLOPE * min(abs(float(cmd[0])), GAIT_FREQ_MAX_VX)
         gait_phase = (gait_phase + freq * control_dt) % 1.0
 
     if viewer_mode:

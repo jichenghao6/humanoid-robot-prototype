@@ -11,6 +11,10 @@ import numpy as np
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCENE_XML = ROOT_DIR / "scene.xml"
 
+GAIT_FREQ_BASE = 0.90
+GAIT_FREQ_SLOPE = 0.35
+GAIT_FREQ_MAX_VX = 2.4
+
 # 21 core locomotion & arm-swing DOFs (distal wrist/neck/head/upper-torso stay held at neutral 0)
 ACTION_JOINT_NAMES: tuple[str, ...] = (
     "spine_lower_flex",
@@ -59,9 +63,9 @@ NATURAL_STAND_RAD: dict[str, float] = {
     "hip_R_flex": 0.09,
     "knee_R_flex": 0.18,
     "ankle_R_flex": 0.09,
-    "shoulder_L_abd": 0.05,
+    "shoulder_L_abd": 0.11,
     "elbow_L_flex": 0.30,
-    "shoulder_R_abd": 0.05,
+    "shoulder_R_abd": 0.11,
     "elbow_R_flex": 0.30,
 }
 

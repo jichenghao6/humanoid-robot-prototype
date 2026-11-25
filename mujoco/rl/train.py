@@ -54,7 +54,7 @@ def build_train_cfg(args: argparse.Namespace) -> dict:
             "gamma": 0.99,
             "lam": 0.95,
             "value_loss_coef": 1.0,
-            "entropy_coef": 0.004 if args.task == "run" else 0.006,
+            "entropy_coef": 0.002 if args.task == "run" else 0.0025,
             "learning_rate": 3e-4,
             "max_grad_norm": 1.0,
             "optimizer": "adam",
